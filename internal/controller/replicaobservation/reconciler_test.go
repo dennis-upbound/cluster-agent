@@ -125,7 +125,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		"ReadsReplica": {
-			reason: "Only the replica's pods, and ResourceClaims in its namespace, should be observed. A pod the selector matches that isn't part of a replica shouldn't be.",
+			reason: "Only the replica's pods and the ResourceClaims they name should be observed. A pod the selector matches that isn't part of a replica shouldn't be, and a claim that doesn't exist yet should be skipped.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.ReplicaObservation{
@@ -134,6 +134,7 @@ func TestReconcile(t *testing.T) {
 					},
 					&corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{"app": "llama", replica.LabelReplica: "llama"}},
+						Spec:       corev1.PodSpec{ResourceClaims: []corev1.PodResourceClaim{{Name: "shared", ResourceClaimName: new("not-yet-created")}}},
 						Status:     corev1.PodStatus{ResourceClaimStatuses: []corev1.PodResourceClaimStatus{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}}},
 					},
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0", Labels: map[string]string{"app": "qwen", replica.LabelReplica: "qwen"}}},
@@ -149,11 +150,11 @@ func TestReconcile(t *testing.T) {
 				inputs: replica.Inputs{
 					Pods: []corev1.Pod{{
 						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{"app": "llama", replica.LabelReplica: "llama"}},
+						Spec:       corev1.PodSpec{ResourceClaims: []corev1.PodResourceClaim{{Name: "shared", ResourceClaimName: new("not-yet-created")}}},
 						Status:     corev1.PodStatus{ResourceClaimStatuses: []corev1.PodResourceClaimStatus{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}}},
 					}},
 					Claims: []resourcev1.ResourceClaim{
 						{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
-						{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0-gpu"}},
 					},
 					Slices: []resourcev1.ResourceSlice{
 						{ObjectMeta: metav1.ObjectMeta{Name: "node-a-gpu"}, Spec: resourcev1.ResourceSliceSpec{Driver: "gpu.nvidia.com", Pool: resourcev1.ResourcePool{Name: "node-a"}}},

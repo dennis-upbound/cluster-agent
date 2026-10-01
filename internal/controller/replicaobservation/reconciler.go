@@ -208,16 +208,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}, client.HasLabels{replica.LabelReplica}, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
-	claims := &resourcev1.ResourceClaimList{}
-	if err := r.client.List(ctx, claims, client.InNamespace(observation.GetNamespace()), client.UnsafeDisableDeepCopy); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
+	var claims []resourcev1.ResourceClaim
+	for _, p := range pods.Items {
+		for _, name := range replica.ClaimNames(p) {
+			claim := &resourcev1.ResourceClaim{}
+			err := r.client.Get(ctx, types.NamespacedName{Namespace: p.GetNamespace(), Name: name}, claim, client.UnsafeDisableDeepCopy)
+			if kerrors.IsNotFound(err) {
+				// A claim that doesn't exist hasn't allocated any devices.
+				continue
+			}
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("cannot get ResourceClaim %q: %w", name, err)
+			}
+			claims = append(claims, *claim)
+		}
 	}
 	rslices := &resourcev1.ResourceSliceList{}
 	if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
 	}
 
-	o := r.observer.ObserveReplica(replica.Inputs{Pods: pods.Items, Claims: claims.Items, Slices: rslices.Items})
+	o := r.observer.ObserveReplica(replica.Inputs{Pods: pods.Items, Claims: claims, Slices: rslices.Items})
 	err = ApplyStatus(ctx, r.client, req.NamespacedName, Status(observation.Status, observation.GetGeneration(), o))
 	if kerrors.IsInvalid(err) {
 		// The API server rejects a status that exceeds the schema's bounds,

@@ -42,7 +42,8 @@ type Inputs struct {
 	// pods reference are observed.
 	Claims []resourcev1.ResourceClaim
 
-	// Slices are the cluster's ResourceSlices.
+	// Slices are ResourceSlices. Only those of the DRA pools the claims
+	// allocated devices from are observed.
 	Slices []resourcev1.ResourceSlice
 }
 
@@ -113,7 +114,6 @@ type Device struct {
 
 // Observe returns what's true of the replica the supplied objects describe.
 func Observe(in Inputs) Observation {
-	devices := dra.Devices(in.Slices)
 	claims := make(map[string]*resourcev1.ResourceClaim, len(in.Claims))
 	for i := range in.Claims {
 		claims[in.Claims[i].Namespace+"/"+in.Claims[i].Name] = &in.Claims[i]
@@ -123,26 +123,37 @@ func Observe(in Inputs) Observation {
 	allocated := map[dra.DeviceID]bool{}
 	for _, p := range in.Pods {
 		observation.Pods = append(observation.Pods, ObservePod(p))
-
 		for _, name := range ClaimNames(p) {
-			c, ok := claims[p.Namespace+"/"+name]
-			if !ok {
-				continue
-			}
-			for _, id := range dra.Allocations(c) {
-				if allocated[id] {
-					continue
+			if c, ok := claims[p.Namespace+"/"+name]; ok {
+				for _, id := range dra.Allocations(c) {
+					allocated[id] = true
 				}
-				allocated[id] = true
-
-				d := Device{ID: id}
-				if pd, ok := devices[id]; ok {
-					d.NodeName = pd.NodeName
-					d.UUID, _ = pd.StringAttribute("uuid")
-				}
-				observation.Devices = append(observation.Devices, d)
 			}
 		}
+	}
+
+	// A replica's devices come from a few of the cluster's DRA pools, so only
+	// index the devices those pools publish.
+	type driverPool struct{ driver, pool string }
+	pools := map[driverPool]bool{}
+	for id := range allocated {
+		pools[driverPool{driver: id.Driver, pool: id.Pool}] = true
+	}
+	var published []resourcev1.ResourceSlice
+	for _, s := range in.Slices {
+		if pools[driverPool{driver: s.Spec.Driver, pool: s.Spec.Pool.Name}] {
+			published = append(published, s)
+		}
+	}
+	devices := dra.Devices(published)
+
+	for id := range allocated {
+		d := Device{ID: id}
+		if pd, ok := devices[id]; ok {
+			d.NodeName = pd.NodeName
+			d.UUID, _ = pd.StringAttribute("uuid")
+		}
+		observation.Devices = append(observation.Devices, d)
 	}
 
 	slices.SortFunc(observation.Pods, func(a, b Pod) int { return strings.Compare(a.Name, b.Name) })
