@@ -45,8 +45,9 @@ type Device struct {
 
 // Devices returns the devices the supplied ResourceSlices currently publish.
 // A driver can spread a pool over several slices, each stamped with the
-// pool's generation. Like the scheduler, Devices only reads slices of a
-// pool's newest generation, because older ones are being replaced.
+// pool's generation. Devices only reads slices of a pool's newest generation,
+// because older ones are being replaced. Unlike the scheduler, it reads a pool
+// whose newest generation isn't yet complete.
 func Devices(slices []resourcev1.ResourceSlice) map[DeviceID]Device {
 	type pool struct{ driver, name string }
 
