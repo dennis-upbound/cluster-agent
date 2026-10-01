@@ -516,8 +516,10 @@ func LatestScaleUpEvent(events []corev1.Event, p corev1.Pod) (corev1.Event, bool
 		if e.Reason != eventTriggeredScaleUp && e.Reason != eventNotTriggerScaleUp {
 			continue
 		}
+		// Event times have one second precision, so break ties by name
+		// rather than by the order the cache lists events in.
 		t := EventTime(e)
-		if found && !t.After(at) {
+		if found && (t.Before(at) || t.Equal(at) && e.Name < latest.Name) {
 			continue
 		}
 		latest, at, found = e, t, true
