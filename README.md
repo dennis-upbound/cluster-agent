@@ -42,3 +42,18 @@ metadata:
 spec: {}
 EOF
 ```
+
+## Releasing
+
+Releases are cut from a release branch, like Modelplane's. To release
+`v0.1.0`:
+
+1. Create a `release-0.1` branch from `main`.
+2. Create a GitHub release targeting that branch, and let it create the tag
+   `v0.1.0`.
+3. Run the `CI` workflow against the `v0.1.0` tag, with its `tag` input set to
+   `v0.1.0`.
+
+The `tag` input makes the workflow push the image at that version, rather than
+the dev version it derives from git metadata. A patch release reuses the
+`release-0.1` branch.

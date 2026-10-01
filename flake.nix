@@ -25,10 +25,14 @@
         "arm64"
       ];
 
-      # A dev version from git metadata. (self ? shortRev tests whether the
-      # tree is clean; a dirty tree only has dirtyShortRev.)
+      # Set by CI to release a version. Otherwise the version is a dev version
+      # from git metadata. (self ? shortRev tests whether the tree is clean; a
+      # dirty tree only has dirtyShortRev.)
+      buildVersion = null;
       version =
-        if self ? shortRev then
+        if buildVersion != null then
+          buildVersion
+        else if self ? shortRev then
           "v0.0.0-${toString self.lastModified}-${self.shortRev}"
         else
           "v0.0.0-${toString self.lastModified}-${self.dirtyShortRev or "dev"}";
@@ -263,10 +267,11 @@
               '';
 
           push =
-            app "push" "Push a multi-architecture image, e.g. nix run .#push -- ttl.sh/cluster-agent:1h"
+            app "push"
+              "Push a multi-architecture image tagged with the agent's version, e.g. nix run .#push -- ttl.sh/cluster-agent"
               [ pkgs.crane ]
               ''
-                ref="''${1:?Usage: nix run .#push -- <registry/repository:tag>}"
+                ref="''${1:?Usage: nix run .#push -- <registry/repository>}:${version}"
                 ${pkgs.lib.concatMapStrings (a: ''
                   crane push ${b.image a} "$ref-${a}"
                 '') arches}

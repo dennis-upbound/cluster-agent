@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          Version tag to push the image with, e.g. v0.1.0. Leave empty to push
+          a dev version derived from git metadata. To cut a release, run this
+          workflow against the release tag (e.g. v0.1.0) with this set to the
+          same value.
+        type: string
+        required: false
+        default: ""
+
+# Cancel in-progress runs for the same PR. Runs on main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REPOSITORY: xpkg.upbound.io/modelplane/cluster-agent
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: log-lines = 500
+
+      # Cache Nix store paths in the GitHub Actions cache so builds reuse work
+      # across runs. use-flakehub is off so artifacts stay in the Actions cache
+      # rather than going to a third party, which matters for a private repo.
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
+        with:
+          use-flakehub: false
+
+      - name: Check
+        run: nix flake check --print-build-logs
+
+  # Pushes the image on every push to main and on any manual run. Both push a
+  # dev version derived from git metadata unless the run supplies a tag input,
+  # which is how releases are cut - see README.md.
+  push:
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      || github.event_name == 'workflow_dispatch'
+    needs: [check]
+    runs-on: ubuntu-24.04
+
+    # Secrets aren't available in if expressions, so expose the (non-secret)
+    # robot ID as an env var that the push steps can gate on. Forks don't have
+    # the secret, so their runs build the image but skip pushing it.
+    env:
+      UP_ROBOT_ID: ${{ secrets.UP_ROBOT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: log-lines = 500
+
+      # See the check job for why use-flakehub is off.
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
+        with:
+          use-flakehub: false
+
+      # A build can only read git tracked files, so a release sets its version
+      # in flake.nix rather than passing it in.
+      - name: Set version
+        if: inputs.tag != ''
+        env:
+          TAG: ${{ inputs.tag }}
+        run: sed -i "s|buildVersion = null;|buildVersion = \"${TAG}\";|" flake.nix
+
+      - name: Build chart
+        run: nix build .#chart --out-link chart --print-build-logs
+
+      # Where to publish the chart is undecided, so keep it as a run artifact.
+      - name: Upload chart
+        uses: actions/upload-artifact@v4
+        with:
+          name: chart
+          path: chart/*.tgz
+
+      # crane uses Docker's credential store for OCI pushes.
+      - name: Login to registry
+        if: env.UP_ROBOT_ID != ''
+        uses: docker/login-action@v3
+        with:
+          registry: xpkg.upbound.io
+          username: ${{ env.UP_ROBOT_ID }}
+          password: ${{ secrets.UP_ROBOT_TOKEN }}
+
+      - name: Push
+        if: env.UP_ROBOT_ID != ''
+        run: nix run .#push --print-build-logs -- "${REPOSITORY}"
