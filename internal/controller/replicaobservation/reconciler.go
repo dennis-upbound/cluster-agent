@@ -206,8 +206,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		if err := r.client.List(ctx, claims, client.InNamespace(observation.GetNamespace())); err != nil {
 			return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
 		}
+		// ResourceSlices are the largest objects the agent reads, and nothing
+		// modifies them, so read them without copying them out of the cache.
 		rslices := &resourcev1.ResourceSliceList{}
-		if err := r.client.List(ctx, rslices); err != nil {
+		if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
 			return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
 		}
 
