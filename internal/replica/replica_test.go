@@ -26,10 +26,13 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/modelplaneai/cluster-agent/internal/dra"
 )
+
+var equateQuantities = cmp.Comparer(func(a, b resource.Quantity) bool { return a.Cmp(b) == 0 })
 
 // The testdata directory holds objects captured from an EKS cluster with one
 // g6.12xlarge node (4 NVIDIA L4 GPUs). Each replica in the ml-test namespace
@@ -160,12 +163,31 @@ func TestObserve(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			before := deepCopy(tc.in)
 			got := Observe(tc.in)
 			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want, +got:\n%s", tc.reason, diff)
 			}
+			// The agent reads inputs straight from its cache.
+			if diff := cmp.Diff(before, tc.in, equateQuantities); diff != "" {
+				t.Errorf("\n%s\nObserve(...): modified its inputs: -before, +after:\n%s", tc.reason, diff)
+			}
 		})
 	}
+}
+
+func deepCopy(in Inputs) Inputs {
+	out := Inputs{}
+	for i := range in.Pods {
+		out.Pods = append(out.Pods, *in.Pods[i].DeepCopy())
+	}
+	for i := range in.Claims {
+		out.Claims = append(out.Claims, *in.Claims[i].DeepCopy())
+	}
+	for i := range in.Slices {
+		out.Slices = append(out.Slices, *in.Slices[i].DeepCopy())
+	}
+	return out
 }
 
 func load[T any](t *testing.T, path string) T {
