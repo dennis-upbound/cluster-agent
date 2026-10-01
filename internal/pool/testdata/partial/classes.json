@@ -1,0 +1,89 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "DeviceClass",
+      "metadata": {
+        "annotations": {
+          "meta.helm.sh/release-name": "mp-dra-driver-nvidia-gpu",
+          "meta.helm.sh/release-namespace": "nvidia-dra-driver"
+        },
+        "creationTimestamp": "2026-10-01T04:13:56Z",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/managed-by": "Helm"
+        },
+        "name": "gpu.nvidia.com",
+        "resourceVersion": "12111",
+        "uid": "761bf3ae-3fcf-4a63-8c37-c495e075385a"
+      },
+      "spec": {
+        "extendedResourceName": "nvidia.com/gpu",
+        "selectors": [
+          {
+            "cel": {
+              "expression": "device.driver == 'gpu.nvidia.com' && device.attributes['gpu.nvidia.com'].type == 'gpu'"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "DeviceClass",
+      "metadata": {
+        "annotations": {
+          "meta.helm.sh/release-name": "mp-dra-driver-nvidia-gpu",
+          "meta.helm.sh/release-namespace": "nvidia-dra-driver"
+        },
+        "creationTimestamp": "2026-10-01T04:13:56Z",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/managed-by": "Helm"
+        },
+        "name": "mig.nvidia.com",
+        "resourceVersion": "12110",
+        "uid": "32bcb999-018c-4fc0-9cf1-c1b26d77a6a6"
+      },
+      "spec": {
+        "selectors": [
+          {
+            "cel": {
+              "expression": "device.driver == 'gpu.nvidia.com' && device.attributes['gpu.nvidia.com'].type == 'mig'"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "DeviceClass",
+      "metadata": {
+        "annotations": {
+          "meta.helm.sh/release-name": "mp-dra-driver-nvidia-gpu",
+          "meta.helm.sh/release-namespace": "nvidia-dra-driver"
+        },
+        "creationTimestamp": "2026-10-01T04:13:56Z",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/managed-by": "Helm"
+        },
+        "name": "vfio.gpu.nvidia.com",
+        "resourceVersion": "12109",
+        "uid": "bc3e5be5-a7c0-4f52-8e03-3f23194e3ba3"
+      },
+      "spec": {
+        "selectors": [
+          {
+            "cel": {
+              "expression": "device.driver == 'gpu.nvidia.com' && device.attributes['gpu.nvidia.com'].type == 'vfio'"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {}
+}

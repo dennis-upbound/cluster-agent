@@ -1,0 +1,1010 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:37Z",
+        "generateName": "bad-image-6cc4ddc98f-",
+        "generation": 1,
+        "labels": {
+          "modelplane.ai/replica": "bad-image",
+          "pod-template-hash": "6cc4ddc98f",
+          "topology.kubernetes.io/region": "us-east-1",
+          "topology.kubernetes.io/zone": "us-east-1b"
+        },
+        "name": "bad-image-6cc4ddc98f-6gm5s",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "bad-image-6cc4ddc98f",
+            "uid": "a871a0a3-4310-4c1f-a75b-2d9c6d68c024"
+          }
+        ],
+        "resourceVersion": "28260",
+        "uid": "18839a2c-ff9f-4544-a815-291c1b11d4fc"
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "registry.k8s.io/does-not-exist:v0.0.0",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "engine",
+            "resources": {},
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-m47d9",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-10-0-69-153.ec2.internal",
+        "nodeSelector": {
+          "modelplane.ai/pool": "system"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-m47d9",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:38Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "message": "containers with unready status: [engine]",
+            "observedGeneration": 1,
+            "reason": "ContainersNotReady",
+            "status": "False",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "message": "containers with unready status: [engine]",
+            "observedGeneration": 1,
+            "reason": "ContainersNotReady",
+            "status": "False",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "image": "registry.k8s.io/does-not-exist:v0.0.0",
+            "imageID": "",
+            "lastState": {},
+            "name": "engine",
+            "ready": false,
+            "restartCount": 0,
+            "started": false,
+            "state": {
+              "waiting": {
+                "message": "Back-off pulling image \"registry.k8s.io/does-not-exist:v0.0.0\": ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"registry.k8s.io/does-not-exist:v0.0.0\": failed to resolve reference \"registry.k8s.io/does-not-exist:v0.0.0\": registry.k8s.io/does-not-exist:v0.0.0: not found",
+                "reason": "ImagePullBackOff"
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-m47d9",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "10.0.69.153",
+        "hostIPs": [
+          {
+            "ip": "10.0.69.153"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Pending",
+        "podIP": "10.0.72.195",
+        "podIPs": [
+          {
+            "ip": "10.0.72.195"
+          }
+        ],
+        "qosClass": "BestEffort",
+        "resources": {},
+        "startTime": "2026-10-01T04:40:37Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:35Z",
+        "generateName": "one-gpu-57bf7796f9-",
+        "generation": 1,
+        "labels": {
+          "modelplane.ai/replica": "one-gpu",
+          "pod-template-hash": "57bf7796f9",
+          "topology.kubernetes.io/region": "us-east-1",
+          "topology.kubernetes.io/zone": "us-east-1a"
+        },
+        "name": "one-gpu-57bf7796f9-f6vrt",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "one-gpu-57bf7796f9",
+            "uid": "40bd947d-9a80-4061-80ba-e7e0887e2baf"
+          }
+        ],
+        "resourceVersion": "26398",
+        "uid": "7c5c144e-beae-4de1-82fe-171e51b4b397"
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "registry.k8s.io/pause:3.10",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "engine",
+            "resources": {
+              "claims": [
+                {
+                  "name": "gpu"
+                }
+              ]
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-ndcdx",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-10-0-54-161.ec2.internal",
+        "nodeSelector": {
+          "modelplane.ai/pool": "gpu-l4x4-a"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "resourceClaims": [
+          {
+            "name": "gpu",
+            "resourceClaimTemplateName": "one-gpu"
+          }
+        ],
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoSchedule",
+            "key": "nvidia.com/gpu",
+            "operator": "Exists"
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-ndcdx",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:36Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:35Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:35Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResourcesStatus": [
+              {
+                "name": "claim:gpu",
+                "resources": [
+                  {
+                    "health": "Unknown",
+                    "resourceID": "k8s.gpu.nvidia.com/claim=d18cf08e-3135-4b08-acf0-0db06605d2eb-gpu-2"
+                  }
+                ]
+              }
+            ],
+            "containerID": "containerd://aac765af51dbec1f60babbda5b9084290a955b863454ee911593984cc3e8d832",
+            "image": "registry.k8s.io/pause:3.10",
+            "imageID": "registry.k8s.io/pause@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a",
+            "lastState": {},
+            "name": "engine",
+            "ready": true,
+            "resources": {
+              "claims": [
+                {
+                  "name": "gpu"
+                }
+              ]
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-10-01T04:40:37Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 0,
+                "supplementalGroups": [
+                  0,
+                  39
+                ],
+                "uid": 65535
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-ndcdx",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "10.0.54.161",
+        "hostIPs": [
+          {
+            "ip": "10.0.54.161"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "10.0.62.45",
+        "podIPs": [
+          {
+            "ip": "10.0.62.45"
+          }
+        ],
+        "qosClass": "BestEffort",
+        "resourceClaimStatuses": [
+          {
+            "name": "gpu",
+            "resourceClaimName": "one-gpu-57bf7796f9-f6vrt-gpu-vqbp2"
+          }
+        ],
+        "resources": {},
+        "startTime": "2026-10-01T04:40:35Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:37Z",
+        "generateName": "stocked-out-db588bffc-",
+        "generation": 1,
+        "labels": {
+          "modelplane.ai/replica": "stocked-out",
+          "pod-template-hash": "db588bffc"
+        },
+        "name": "stocked-out-db588bffc-bzgt8",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "stocked-out-db588bffc",
+            "uid": "ab182515-527c-4b26-b48c-339ada5e79d9"
+          }
+        ],
+        "resourceVersion": "28971",
+        "uid": "4b886390-11f0-4729-94e9-57b595030ba9"
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "registry.k8s.io/pause:3.10",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "engine",
+            "resources": {
+              "claims": [
+                {
+                  "name": "gpu"
+                }
+              ]
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-7gr8l",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeSelector": {
+          "modelplane.ai/pool": "gpu-l4x4"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "resourceClaims": [
+          {
+            "name": "gpu",
+            "resourceClaimTemplateName": "stocked-out"
+          }
+        ],
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoSchedule",
+            "key": "nvidia.com/gpu",
+            "operator": "Exists"
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-7gr8l",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "message": "0/2 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable. still not schedulable, preemption: 0/2 nodes are available: 2 Preemption is not helpful for scheduling.",
+            "observedGeneration": 1,
+            "reason": "Unschedulable",
+            "status": "False",
+            "type": "PodScheduled"
+          }
+        ],
+        "phase": "Pending",
+        "qosClass": "BestEffort",
+        "resourceClaimStatuses": [
+          {
+            "name": "gpu",
+            "resourceClaimName": "stocked-out-db588bffc-bzgt8-gpu-c5cjc"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:36Z",
+        "generateName": "too-big-5859cf75cf-",
+        "generation": 1,
+        "labels": {
+          "modelplane.ai/replica": "too-big",
+          "pod-template-hash": "5859cf75cf"
+        },
+        "name": "too-big-5859cf75cf-jzm8n",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "too-big-5859cf75cf",
+            "uid": "9f5f8182-5d45-4d83-9f03-0c4f736962dd"
+          }
+        ],
+        "resourceVersion": "28974",
+        "uid": "b73bc0cd-9ec1-4edb-9ba8-ac962cbf9dd4"
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "registry.k8s.io/pause:3.10",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "engine",
+            "resources": {
+              "claims": [
+                {
+                  "name": "gpu"
+                }
+              ]
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-cpzvx",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeSelector": {
+          "modelplane.ai/pool": "gpu-l4x4-a"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "resourceClaims": [
+          {
+            "name": "gpu",
+            "resourceClaimTemplateName": "too-big"
+          }
+        ],
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoSchedule",
+            "key": "nvidia.com/gpu",
+            "operator": "Exists"
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-cpzvx",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:36Z",
+            "message": "0/2 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable. still not schedulable, preemption: 0/2 nodes are available: 2 Preemption is not helpful for scheduling.",
+            "observedGeneration": 1,
+            "reason": "Unschedulable",
+            "status": "False",
+            "type": "PodScheduled"
+          }
+        ],
+        "phase": "Pending",
+        "qosClass": "BestEffort",
+        "resourceClaimStatuses": [
+          {
+            "name": "gpu",
+            "resourceClaimName": "too-big-5859cf75cf-jzm8n-gpu-86w5w"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:36Z",
+        "generateName": "two-gpu-7f7ff797d7-",
+        "generation": 1,
+        "labels": {
+          "modelplane.ai/replica": "two-gpu",
+          "pod-template-hash": "7f7ff797d7",
+          "topology.kubernetes.io/region": "us-east-1",
+          "topology.kubernetes.io/zone": "us-east-1a"
+        },
+        "name": "two-gpu-7f7ff797d7-vs2w9",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "two-gpu-7f7ff797d7",
+            "uid": "d4fbaccd-0b08-48e8-a0a0-796518a64481"
+          }
+        ],
+        "resourceVersion": "26405",
+        "uid": "57308442-b33b-4f19-a8bd-c2441bacd378"
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "registry.k8s.io/pause:3.10",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "engine",
+            "resources": {
+              "claims": [
+                {
+                  "name": "gpu"
+                }
+              ]
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-pkcgr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-10-0-54-161.ec2.internal",
+        "nodeSelector": {
+          "modelplane.ai/pool": "gpu-l4x4-a"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "resourceClaims": [
+          {
+            "name": "gpu",
+            "resourceClaimTemplateName": "two-gpu"
+          }
+        ],
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoSchedule",
+            "key": "nvidia.com/gpu",
+            "operator": "Exists"
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-pkcgr",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:36Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:37Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-01T04:40:36Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResourcesStatus": [
+              {
+                "name": "claim:gpu",
+                "resources": [
+                  {
+                    "health": "Unknown",
+                    "resourceID": "k8s.gpu.nvidia.com/claim=bd5b9231-19f7-4ebb-92c9-6a9a990e8c89-gpu-3"
+                  },
+                  {
+                    "health": "Unknown",
+                    "resourceID": "k8s.gpu.nvidia.com/claim=bd5b9231-19f7-4ebb-92c9-6a9a990e8c89-gpu-0"
+                  }
+                ]
+              }
+            ],
+            "containerID": "containerd://a127a6e434da953817063242db29d3093db12628e0c74741a011d00720974b09",
+            "image": "registry.k8s.io/pause:3.10",
+            "imageID": "registry.k8s.io/pause@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a",
+            "lastState": {},
+            "name": "engine",
+            "ready": true,
+            "resources": {
+              "claims": [
+                {
+                  "name": "gpu"
+                }
+              ]
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-10-01T04:40:37Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 0,
+                "supplementalGroups": [
+                  0,
+                  39
+                ],
+                "uid": 65535
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-pkcgr",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "10.0.54.161",
+        "hostIPs": [
+          {
+            "ip": "10.0.54.161"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "10.0.63.175",
+        "podIPs": [
+          {
+            "ip": "10.0.63.175"
+          }
+        ],
+        "qosClass": "BestEffort",
+        "resourceClaimStatuses": [
+          {
+            "name": "gpu",
+            "resourceClaimName": "two-gpu-7f7ff797d7-vs2w9-gpu-s9bkk"
+          }
+        ],
+        "resources": {},
+        "startTime": "2026-10-01T04:40:36Z"
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {}
+}

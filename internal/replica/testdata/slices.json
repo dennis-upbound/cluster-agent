@@ -1,0 +1,211 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "ResourceSlice",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:15:22Z",
+        "generateName": "00000-gpu.nvidia.com-ip-10-0-54-161.ec2.internal-",
+        "generation": 1,
+        "name": "00000-gpu.nvidia.com-ip-10-0-54-161.ec2.internal-w7jsg",
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "controller": true,
+            "kind": "Node",
+            "name": "ip-10-0-54-161.ec2.internal",
+            "uid": "e1fbf66c-f7a8-4a62-9eae-aae9ff2dd074"
+          }
+        ],
+        "resourceVersion": "13214",
+        "uid": "1fbf95e4-0fac-43e1-93d1-a90e478b5087"
+      },
+      "spec": {
+        "devices": [
+          {
+            "attributes": {
+              "addressingMode": {
+                "string": "HMM"
+              },
+              "architecture": {
+                "string": "Ada Lovelace"
+              },
+              "brand": {
+                "string": "Nvidia"
+              },
+              "cudaComputeCapability": {
+                "version": "8.9.0"
+              },
+              "cudaDriverVersion": {
+                "version": "13.0.0"
+              },
+              "driverVersion": {
+                "version": "580.178.4"
+              },
+              "productName": {
+                "string": "NVIDIA L4"
+              },
+              "resource.kubernetes.io/pciBusID": {
+                "string": "0000:3c:00.0"
+              },
+              "resource.kubernetes.io/pcieRoot": {
+                "string": "pci0000:3b"
+              },
+              "type": {
+                "string": "gpu"
+              },
+              "uuid": {
+                "string": "GPU-22d002d7-9f44-8df8-be6a-ed374d260c75"
+              }
+            },
+            "capacity": {
+              "memory": {
+                "value": "23034Mi"
+              }
+            },
+            "name": "gpu-2"
+          },
+          {
+            "attributes": {
+              "addressingMode": {
+                "string": "HMM"
+              },
+              "architecture": {
+                "string": "Ada Lovelace"
+              },
+              "brand": {
+                "string": "Nvidia"
+              },
+              "cudaComputeCapability": {
+                "version": "8.9.0"
+              },
+              "cudaDriverVersion": {
+                "version": "13.0.0"
+              },
+              "driverVersion": {
+                "version": "580.178.4"
+              },
+              "productName": {
+                "string": "NVIDIA L4"
+              },
+              "resource.kubernetes.io/pciBusID": {
+                "string": "0000:3e:00.0"
+              },
+              "resource.kubernetes.io/pcieRoot": {
+                "string": "pci0000:3d"
+              },
+              "type": {
+                "string": "gpu"
+              },
+              "uuid": {
+                "string": "GPU-df9aa0e4-eeb5-f9ec-3eb8-2c20dd4df42d"
+              }
+            },
+            "capacity": {
+              "memory": {
+                "value": "23034Mi"
+              }
+            },
+            "name": "gpu-3"
+          },
+          {
+            "attributes": {
+              "addressingMode": {
+                "string": "HMM"
+              },
+              "architecture": {
+                "string": "Ada Lovelace"
+              },
+              "brand": {
+                "string": "Nvidia"
+              },
+              "cudaComputeCapability": {
+                "version": "8.9.0"
+              },
+              "cudaDriverVersion": {
+                "version": "13.0.0"
+              },
+              "driverVersion": {
+                "version": "580.178.4"
+              },
+              "productName": {
+                "string": "NVIDIA L4"
+              },
+              "resource.kubernetes.io/pciBusID": {
+                "string": "0000:38:00.0"
+              },
+              "resource.kubernetes.io/pcieRoot": {
+                "string": "pci0000:37"
+              },
+              "type": {
+                "string": "gpu"
+              },
+              "uuid": {
+                "string": "GPU-69cc0a42-63bd-f2b2-4188-90f6a6345830"
+              }
+            },
+            "capacity": {
+              "memory": {
+                "value": "23034Mi"
+              }
+            },
+            "name": "gpu-0"
+          },
+          {
+            "attributes": {
+              "addressingMode": {
+                "string": "HMM"
+              },
+              "architecture": {
+                "string": "Ada Lovelace"
+              },
+              "brand": {
+                "string": "Nvidia"
+              },
+              "cudaComputeCapability": {
+                "version": "8.9.0"
+              },
+              "cudaDriverVersion": {
+                "version": "13.0.0"
+              },
+              "driverVersion": {
+                "version": "580.178.4"
+              },
+              "productName": {
+                "string": "NVIDIA L4"
+              },
+              "resource.kubernetes.io/pciBusID": {
+                "string": "0000:3a:00.0"
+              },
+              "resource.kubernetes.io/pcieRoot": {
+                "string": "pci0000:39"
+              },
+              "type": {
+                "string": "gpu"
+              },
+              "uuid": {
+                "string": "GPU-bb50b0be-b67d-c451-b89e-dc3b45303d51"
+              }
+            },
+            "capacity": {
+              "memory": {
+                "value": "23034Mi"
+              }
+            },
+            "name": "gpu-1"
+          }
+        ],
+        "driver": "gpu.nvidia.com",
+        "nodeName": "ip-10-0-54-161.ec2.internal",
+        "pool": {
+          "generation": 1,
+          "name": "ip-10-0-54-161.ec2.internal",
+          "resourceSliceCount": 1
+        }
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {}
+}

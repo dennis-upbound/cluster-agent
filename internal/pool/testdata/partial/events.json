@@ -1,0 +1,441 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:13:01Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "envoy-gateway-76c8656c8b-62rqm",
+        "namespace": "envoy-gateway-system",
+        "resourceVersion": "11363",
+        "uid": "23d20ffd-15e1-4f81-bd95-0bc12901fd04"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:13:01Z",
+      "message": "pod triggered scale-up: [{eks-eks-agent-test-1410921f2f48-b0d07ac3-b5f5-5612-96d9-bbc42be0554f 1->2 (max: 2)}]",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:13:01Z",
+        "name": "envoy-gateway-76c8656c8b-62rqm.18da4c8fb6ce919d",
+        "namespace": "envoy-gateway-system",
+        "resourceVersion": "11382",
+        "uid": "9c8fe1eb-1000-47dc-9b32-0246984cf8aa"
+      },
+      "reason": "TriggeredScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:13:01Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "name": "cluster-autoscaler-status",
+        "namespace": "kube-system",
+        "resourceVersion": "11360",
+        "uid": "99a1e381-176a-4ce4-ae2c-e6c6b6904674"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:13:01Z",
+      "message": "Scale-up: setting group eks-eks-agent-test-1410921f2f48-b0d07ac3-b5f5-5612-96d9-bbc42be0554f size to 2 instead of 1 (max: 2)",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:13:01Z",
+        "name": "cluster-autoscaler-status.18da4c8faedbecf3",
+        "namespace": "kube-system",
+        "resourceVersion": "11369",
+        "uid": "0a7f608c-aa34-4bd6-ba81-3fb668a0b736"
+      },
+      "reason": "ScaledUpGroup",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:13:01Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "name": "cluster-autoscaler-status",
+        "namespace": "kube-system",
+        "resourceVersion": "11360",
+        "uid": "99a1e381-176a-4ce4-ae2c-e6c6b6904674"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:13:01Z",
+      "message": "Scale-up: group eks-eks-agent-test-1410921f2f48-b0d07ac3-b5f5-5612-96d9-bbc42be0554f size set to 2 instead of 1 (max: 2)",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:13:01Z",
+        "name": "cluster-autoscaler-status.18da4c8fb6cd7ad4",
+        "namespace": "kube-system",
+        "resourceVersion": "11379",
+        "uid": "4712c44f-d79d-4fe1-a579-086f67e4e8d0"
+      },
+      "reason": "ScaledUpGroup",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:25:31Z",
+      "involvedObject": {
+        "apiVersion": "coordination.k8s.io/v1",
+        "kind": "Lease",
+        "name": "cluster-autoscaler",
+        "namespace": "kube-system",
+        "resourceVersion": "18443",
+        "uid": "7facaa05-295a-4bf3-8e64-2a4b2f08749d"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:25:31Z",
+      "message": "eks-agent-test-f6544616c688-aws-cluster-autoscaler-749756bcbzsv became leader",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:25:31Z",
+        "name": "cluster-autoscaler.18da4d3e50c316e6",
+        "namespace": "kube-system",
+        "resourceVersion": "18444",
+        "uid": "484d04b0-047e-4ca2-b50d-00f9aedb8a11"
+      },
+      "reason": "LeaderElection",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:42:11Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "one-gpu-57bf7796f9-fm9sv",
+        "namespace": "ml-test",
+        "resourceVersion": "27193",
+        "uid": "bcae5980-516c-4b45-8265-603a26a836b3"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:42:11Z",
+      "message": "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:42:11Z",
+        "name": "one-gpu-57bf7796f9-fm9sv.18da4e26f6bf83e6",
+        "namespace": "ml-test",
+        "resourceVersion": "27283",
+        "uid": "b586338d-258c-4cda-baee-78cb9b8136cb"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:40:47Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "stocked-out-db588bffc-bzgt8",
+        "namespace": "ml-test",
+        "resourceVersion": "26422",
+        "uid": "4b886390-11f0-4729-94e9-57b595030ba9"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:40:47Z",
+      "message": "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:47Z",
+        "name": "stocked-out-db588bffc-bzgt8.18da4e138b25ca8d",
+        "namespace": "ml-test",
+        "resourceVersion": "26535",
+        "uid": "9dc50c58-a1f6-42ec-9b01-3bf4cadc6588"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 20,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:40:37Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "too-big-5859cf75cf-jzm8n",
+        "namespace": "ml-test",
+        "resourceVersion": "26381",
+        "uid": "b73bc0cd-9ec1-4edb-9ba8-ac962cbf9dd4"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:45:42Z",
+      "message": "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:37Z",
+        "name": "too-big-5859cf75cf-jzm8n.18da4e112d861bb2",
+        "namespace": "ml-test",
+        "resourceVersion": "28944",
+        "uid": "fcbba092-f816-4035-9f0c-96dc64472abd"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:12:12Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "10655",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:12:12Z",
+      "message": "pod didn't trigger scale-up: 1 not ready for scale-up, 1 pod has unbound immediate PersistentVolumeClaims",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:12:12Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4c8429f1ebd2",
+        "namespace": "monitoring",
+        "resourceVersion": "10734",
+        "uid": "1ec4a99d-e0f5-49b9-90e6-30b38457600d"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 36,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:14:37Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "12565",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:22:19Z",
+      "message": "pod didn't trigger scale-up: 2 max node group size reached, 1 not ready for scale-up",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:22:19Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4ca5d8b598fc",
+        "namespace": "monitoring",
+        "resourceVersion": "16442",
+        "uid": "aca203d9-a719-48a2-93ee-07b0e0f0ad3c"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 5,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:15:57Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "12565",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:17:17Z",
+      "message": "pod didn't trigger scale-up: 1 not ready for scale-up, 2 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:17:17Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4cb88b7010f9",
+        "namespace": "monitoring",
+        "resourceVersion": "14183",
+        "uid": "036d211b-032f-4ae3-bbdd-506efcac7886"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:25:43Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "12565",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:25:43Z",
+      "message": "pod didn't trigger scale-up: 2 pod has unbound immediate PersistentVolumeClaims, 1 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:25:43Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4d411c6c3de2",
+        "namespace": "monitoring",
+        "resourceVersion": "18550",
+        "uid": "83fe9d27-e9da-4ed5-9d44-1867329ae3d5"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 11,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:27:34Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "12565",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:30:45Z",
+      "message": "pod didn't trigger scale-up: 1 pod has unbound immediate PersistentVolumeClaims, 1 not ready for scale-up, 1 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:30:45Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4d5ad91fd1ab",
+        "namespace": "monitoring",
+        "resourceVersion": "21117",
+        "uid": "9b8b426d-a482-41c4-9ec5-924fc703ee9c"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 14,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:27:44Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "12565",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:40:47Z",
+      "message": "pod didn't trigger scale-up: 1 not ready for scale-up, 1 max node group size reached, 1 pod has unbound immediate PersistentVolumeClaims",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:40:47Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4d5d2e85bb9a",
+        "namespace": "monitoring",
+        "resourceVersion": "26537",
+        "uid": "a40a16ba-fdaf-4428-b787-e509bb9f257c"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-10-01T04:35:47Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "prometheus-kube-prometheus-prometheus-0",
+        "namespace": "monitoring",
+        "resourceVersion": "12565",
+        "uid": "9cccf8d9-6050-40ac-9f94-e56733a45a38"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-10-01T04:35:47Z",
+      "message": "pod didn't trigger scale-up: 1 not ready for scale-up, 1 pod has unbound immediate PersistentVolumeClaims, 1 max node group size reached",
+      "metadata": {
+        "creationTimestamp": "2026-10-01T04:35:47Z",
+        "name": "prometheus-kube-prometheus-prometheus-0.18da4dcd9f2aa13b",
+        "namespace": "monitoring",
+        "resourceVersion": "23652",
+        "uid": "c5311ab5-317f-4b03-8561-bbac2c5d7024"
+      },
+      "reason": "NotTriggerScaleUp",
+      "reportingComponent": "cluster-autoscaler",
+      "reportingInstance": "",
+      "source": {
+        "component": "cluster-autoscaler"
+      },
+      "type": "Normal"
+    }
+  ],
+  "kind": "List",
+  "metadata": {}
+}

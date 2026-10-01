@@ -1,0 +1,259 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "ResourceClaim",
+      "metadata": {
+        "annotations": {
+          "resource.kubernetes.io/pod-claim-name": "gpu"
+        },
+        "creationTimestamp": "2026-10-01T04:40:35Z",
+        "finalizers": [
+          "resource.kubernetes.io/delete-protection"
+        ],
+        "generateName": "one-gpu-57bf7796f9-f6vrt-gpu-",
+        "labels": {
+          "modelplane.ai/replica": "one-gpu"
+        },
+        "name": "one-gpu-57bf7796f9-f6vrt-gpu-vqbp2",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "controller": true,
+            "kind": "Pod",
+            "name": "one-gpu-57bf7796f9-f6vrt",
+            "uid": "7c5c144e-beae-4de1-82fe-171e51b4b397"
+          }
+        ],
+        "resourceVersion": "26330",
+        "uid": "d18cf08e-3135-4b08-acf0-0db06605d2eb"
+      },
+      "spec": {
+        "devices": {
+          "requests": [
+            {
+              "exactly": {
+                "allocationMode": "ExactCount",
+                "count": 1,
+                "deviceClassName": "gpu.nvidia.com"
+              },
+              "name": "gpu"
+            }
+          ]
+        }
+      },
+      "status": {
+        "allocation": {
+          "allocationTimestamp": "2026-10-01T04:40:35Z",
+          "devices": {
+            "results": [
+              {
+                "device": "gpu-2",
+                "driver": "gpu.nvidia.com",
+                "pool": "ip-10-0-54-161.ec2.internal",
+                "request": "gpu"
+              }
+            ]
+          },
+          "nodeSelector": {
+            "nodeSelectorTerms": [
+              {
+                "matchFields": [
+                  {
+                    "key": "metadata.name",
+                    "operator": "In",
+                    "values": [
+                      "ip-10-0-54-161.ec2.internal"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "reservedFor": [
+          {
+            "name": "one-gpu-57bf7796f9-f6vrt",
+            "resource": "pods",
+            "uid": "7c5c144e-beae-4de1-82fe-171e51b4b397"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "ResourceClaim",
+      "metadata": {
+        "annotations": {
+          "resource.kubernetes.io/pod-claim-name": "gpu"
+        },
+        "creationTimestamp": "2026-10-01T04:40:37Z",
+        "generateName": "stocked-out-db588bffc-bzgt8-gpu-",
+        "labels": {
+          "modelplane.ai/replica": "stocked-out"
+        },
+        "name": "stocked-out-db588bffc-bzgt8-gpu-c5cjc",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "controller": true,
+            "kind": "Pod",
+            "name": "stocked-out-db588bffc-bzgt8",
+            "uid": "4b886390-11f0-4729-94e9-57b595030ba9"
+          }
+        ],
+        "resourceVersion": "26417",
+        "uid": "8f9aa653-6b43-44f4-bded-f45af362065f"
+      },
+      "spec": {
+        "devices": {
+          "requests": [
+            {
+              "exactly": {
+                "allocationMode": "ExactCount",
+                "count": 1,
+                "deviceClassName": "gpu.nvidia.com"
+              },
+              "name": "gpu"
+            }
+          ]
+        }
+      },
+      "status": {}
+    },
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "ResourceClaim",
+      "metadata": {
+        "annotations": {
+          "resource.kubernetes.io/pod-claim-name": "gpu"
+        },
+        "creationTimestamp": "2026-10-01T04:40:36Z",
+        "generateName": "too-big-5859cf75cf-jzm8n-gpu-",
+        "labels": {
+          "modelplane.ai/replica": "too-big"
+        },
+        "name": "too-big-5859cf75cf-jzm8n-gpu-86w5w",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "controller": true,
+            "kind": "Pod",
+            "name": "too-big-5859cf75cf-jzm8n",
+            "uid": "b73bc0cd-9ec1-4edb-9ba8-ac962cbf9dd4"
+          }
+        ],
+        "resourceVersion": "26376",
+        "uid": "81ef7e7f-a984-48a7-b1bb-5f52018e1ab1"
+      },
+      "spec": {
+        "devices": {
+          "requests": [
+            {
+              "exactly": {
+                "allocationMode": "ExactCount",
+                "count": 8,
+                "deviceClassName": "gpu.nvidia.com"
+              },
+              "name": "gpu"
+            }
+          ]
+        }
+      },
+      "status": {}
+    },
+    {
+      "apiVersion": "resource.k8s.io/v1",
+      "kind": "ResourceClaim",
+      "metadata": {
+        "annotations": {
+          "resource.kubernetes.io/pod-claim-name": "gpu"
+        },
+        "creationTimestamp": "2026-10-01T04:40:36Z",
+        "finalizers": [
+          "resource.kubernetes.io/delete-protection"
+        ],
+        "generateName": "two-gpu-7f7ff797d7-vs2w9-gpu-",
+        "labels": {
+          "modelplane.ai/replica": "two-gpu"
+        },
+        "name": "two-gpu-7f7ff797d7-vs2w9-gpu-s9bkk",
+        "namespace": "ml-test",
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "controller": true,
+            "kind": "Pod",
+            "name": "two-gpu-7f7ff797d7-vs2w9",
+            "uid": "57308442-b33b-4f19-a8bd-c2441bacd378"
+          }
+        ],
+        "resourceVersion": "26355",
+        "uid": "bd5b9231-19f7-4ebb-92c9-6a9a990e8c89"
+      },
+      "spec": {
+        "devices": {
+          "requests": [
+            {
+              "exactly": {
+                "allocationMode": "ExactCount",
+                "count": 2,
+                "deviceClassName": "gpu.nvidia.com"
+              },
+              "name": "gpu"
+            }
+          ]
+        }
+      },
+      "status": {
+        "allocation": {
+          "allocationTimestamp": "2026-10-01T04:40:36Z",
+          "devices": {
+            "results": [
+              {
+                "device": "gpu-3",
+                "driver": "gpu.nvidia.com",
+                "pool": "ip-10-0-54-161.ec2.internal",
+                "request": "gpu"
+              },
+              {
+                "device": "gpu-0",
+                "driver": "gpu.nvidia.com",
+                "pool": "ip-10-0-54-161.ec2.internal",
+                "request": "gpu"
+              }
+            ]
+          },
+          "nodeSelector": {
+            "nodeSelectorTerms": [
+              {
+                "matchFields": [
+                  {
+                    "key": "metadata.name",
+                    "operator": "In",
+                    "values": [
+                      "ip-10-0-54-161.ec2.internal"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "reservedFor": [
+          {
+            "name": "two-gpu-7f7ff797d7-vs2w9",
+            "resource": "pods",
+            "uid": "57308442-b33b-4f19-a8bd-c2441bacd378"
+          }
+        ]
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {}
+}
