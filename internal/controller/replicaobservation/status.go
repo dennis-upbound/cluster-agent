@@ -30,12 +30,12 @@ import (
 // Container waiting reasons that mean a container won't start without help.
 // The kubelet uses these.
 const (
-	waitingErrImagePull       = "ErrImagePull"
-	waitingImagePullBackOff   = "ImagePullBackOff"
-	waitingCrashLoopBackOff   = "CrashLoopBackOff"
-	waitingInvalidImageName   = "InvalidImageName"
-	waitingCreateConfigError  = "CreateContainerConfigError"
-	waitingCreateContainerErr = "CreateContainerError"
+	waitingErrImagePull               = "ErrImagePull"
+	waitingImagePullBackOff           = "ImagePullBackOff"
+	waitingCrashLoopBackOff           = "CrashLoopBackOff"
+	waitingInvalidImageName           = "InvalidImageName"
+	waitingCreateContainerConfigError = "CreateContainerConfigError"
+	waitingCreateContainerError       = "CreateContainerError"
 )
 
 // Status returns the ReplicaObservation status that reports the supplied
@@ -173,7 +173,7 @@ func Ready(observed replica.Observation) metav1.Condition {
 	}{
 		{reasons: []string{waitingErrImagePull, waitingImagePullBackOff, waitingInvalidImageName}, reason: v1alpha1.ReasonImagePullBackOff},
 		{reasons: []string{waitingCrashLoopBackOff}, reason: v1alpha1.ReasonCrashLoopBackOff},
-		{reasons: []string{waitingCreateConfigError, waitingCreateContainerErr}, reason: v1alpha1.ReasonCreateContainerError},
+		{reasons: []string{waitingCreateContainerConfigError, waitingCreateContainerError}, reason: v1alpha1.ReasonCreateContainerError},
 	} {
 		for _, p := range observed.Pods {
 			i := slices.IndexFunc(p.Waiting, func(w replica.Waiting) bool { return slices.Contains(want.reasons, w.Reason) })
