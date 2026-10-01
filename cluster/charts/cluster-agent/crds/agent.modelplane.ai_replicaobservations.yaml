@@ -193,7 +193,8 @@ spec:
                     nodeName:
                       description: |-
                         NodeName is the node the device is attached to. It's omitted for a
-                        device that isn't attached to one node, like a network-attached device.
+                        device that isn't attached to one node, like a network-attached device,
+                        or that no ResourceSlice currently publishes.
                       maxLength: 253
                       type: string
                     pool:
