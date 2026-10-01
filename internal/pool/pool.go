@@ -43,8 +43,7 @@ const (
 	// pod to a pool with a node selector on it.
 	LabelPool = "modelplane.ai/pool"
 
-	// LabelReplica is the pod and ResourceClaim label that names the replica
-	// the object belongs to.
+	// LabelReplica is the pod label that names the replica the pod belongs to.
 	LabelReplica = "modelplane.ai/replica"
 )
 
@@ -88,9 +87,6 @@ type Observation struct {
 	// ExtendedResources sums the extended resources the pool's nodes
 	// advertise as allocatable.
 	ExtendedResources corev1.ResourceList
-
-	// Replicas whose ResourceClaims have allocated the pool's devices, sorted.
-	Replicas []types.NamespacedName
 
 	// UnschedulablePods are the pods pinned to the pool that the scheduler
 	// couldn't find a node for, sorted.
@@ -203,7 +199,6 @@ func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, 
 	nodes := CountNodes(in.Nodes)
 	tainted := TaintedDevices(devices, m)
 	extended := ExtendedResources(in.Nodes)
-	replicas := Replicas(in.Claims, devices, m)
 	unschedulable := UnschedulablePods(in.Pods, in.Events)
 
 	names := map[string]bool{}
@@ -222,7 +217,6 @@ func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, 
 			Devices:           byClass[name],
 			TaintedDevices:    tainted[name],
 			ExtendedResources: extended[name],
-			Replicas:          replicas[name],
 			UnschedulablePods: unschedulable[name],
 		})
 	}
@@ -315,36 +309,6 @@ func TaintedDevices(devices map[dra.DeviceID]dra.Device, m Membership) map[strin
 		}
 	}
 	return tainted
-}
-
-// Replicas returns the replicas whose claims have allocated each pool's
-// devices, sorted. A claim names its replica with a modelplane.ai/replica
-// label.
-func Replicas(claims []resourcev1.ResourceClaim, devices map[dra.DeviceID]dra.Device, m Membership) map[string][]types.NamespacedName {
-	replicas := map[string]map[types.NamespacedName]bool{}
-	for i := range claims {
-		c := &claims[i]
-		name, ok := c.Labels[LabelReplica]
-		if !ok {
-			continue
-		}
-		for _, id := range dra.Allocations(c) {
-			p, ok := m.Pool[devices[id].NodeName]
-			if !ok {
-				continue
-			}
-			if replicas[p] == nil {
-				replicas[p] = map[types.NamespacedName]bool{}
-			}
-			replicas[p][types.NamespacedName{Namespace: c.Namespace, Name: name}] = true
-		}
-	}
-
-	sorted := make(map[string][]types.NamespacedName, len(replicas))
-	for p, rs := range replicas {
-		sorted[p] = slices.SortedFunc(maps.Keys(rs), compareNamespacedName)
-	}
-	return sorted
 }
 
 // DevicesByClass returns each pool's devices by the DeviceClasses they belong

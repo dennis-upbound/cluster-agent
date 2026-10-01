@@ -83,7 +83,6 @@ func TestStatus(t *testing.T) {
 							},
 						},
 						ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
-						Replicas:          []types.NamespacedName{{Namespace: "ml", Name: "llama"}},
 					},
 				},
 			},
@@ -111,7 +110,6 @@ func TestStatus(t *testing.T) {
 							},
 						},
 						ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
-						Replicas:          []v1alpha1.ReplicaReference{{Namespace: "ml", Name: "llama"}},
 						Conditions: []metav1.Condition{
 							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
 							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: now},

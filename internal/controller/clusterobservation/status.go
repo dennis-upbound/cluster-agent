@@ -64,9 +64,6 @@ func Status(existing v1alpha1.ClusterObservationStatus, pools []pool.Observation
 		for _, d := range p.Devices {
 			ps.Devices = append(ps.Devices, DeviceClassStatus(d))
 		}
-		for _, r := range p.Replicas {
-			ps.Replicas = append(ps.Replicas, v1alpha1.ReplicaReference{Namespace: r.Namespace, Name: r.Name})
-		}
 		status.Pools = append(status.Pools, ps)
 	}
 

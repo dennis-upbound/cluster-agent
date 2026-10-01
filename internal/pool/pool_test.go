@@ -94,10 +94,6 @@ func TestObservePools(t *testing.T) {
 							Attributes:      l4Attributes,
 						},
 					},
-					Replicas: []types.NamespacedName{
-						{Namespace: "ml-test", Name: "one-gpu"},
-						{Namespace: "ml-test", Name: "two-gpu"},
-					},
 					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -137,10 +133,6 @@ func TestObservePools(t *testing.T) {
 							Attributes:      l4Attributes,
 						},
 					},
-					Replicas: []types.NamespacedName{
-						{Namespace: "ml-test", Name: "one-gpu"},
-						{Namespace: "ml-test", Name: "two-gpu"},
-					},
 					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -178,10 +170,6 @@ func TestObservePools(t *testing.T) {
 							Nodes:           1,
 							Attributes:      l4Attributes,
 						},
-					},
-					Replicas: []types.NamespacedName{
-						{Namespace: "ml-test", Name: "one-gpu"},
-						{Namespace: "ml-test", Name: "two-gpu"},
 					},
 					UnschedulablePods: []UnschedulablePod{
 						{

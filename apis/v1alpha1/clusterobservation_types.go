@@ -110,17 +110,6 @@ type PoolStatus struct {
 	// +kubebuilder:validation:MaxProperties=64
 	ExtendedResources map[corev1.ResourceName]resource.Quantity `json:"extendedResources,omitempty"`
 
-	// Replicas are the replicas whose ResourceClaims have allocated devices on
-	// the pool's nodes. A replica is identified by the modelplane.ai/replica
-	// label on its ResourceClaims.
-	//
-	// +optional
-	// +listType=map
-	// +listMapKey=namespace
-	// +listMapKey=name
-	// +kubebuilder:validation:MaxItems=4096
-	Replicas []ReplicaReference `json:"replicas,omitempty"`
-
 	// Conditions of the pool. Healthy is False when any of the pool's nodes
 	// is not ready or cordoned, or any of its devices is tainted.
 	// ScaleUpBlocked is True when the cluster autoscaler reports it can't add
@@ -204,20 +193,6 @@ type FreeDevicesBucket struct {
 	//
 	// +kubebuilder:validation:Minimum=1
 	Nodes int32 `json:"nodes"`
-}
-
-// A ReplicaReference identifies a replica by the namespace and value of the
-// modelplane.ai/replica label on its ResourceClaims.
-type ReplicaReference struct {
-	// Namespace of the replica's ResourceClaims.
-	//
-	// +kubebuilder:validation:MaxLength=63
-	Namespace string `json:"namespace"`
-
-	// Name of the replica.
-	//
-	// +kubebuilder:validation:MaxLength=63
-	Name string `json:"name"`
 }
 
 // ClusterObservationList is a list of ClusterObservations.
