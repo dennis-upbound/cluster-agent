@@ -366,13 +366,17 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 			publishes[k][device.NodeName] = true
 			ds.Attributes = Agreed(ds.Attributes, device.Spec.Attributes)
 
-			if device.Tainted() || !m.Schedulable[device.NodeName] {
+			if !m.Schedulable[device.NodeName] {
 				continue
 			}
+			// Record the node even if its devices are all tainted, so it
+			// counts as a node with no free devices.
 			nd := ds.Schedulable[device.NodeName]
-			nd.Allocatable++
-			if allocated[device.ID] {
-				nd.Allocated++
+			if !device.Tainted() {
+				nd.Allocatable++
+				if allocated[device.ID] {
+					nd.Allocated++
+				}
 			}
 			ds.Schedulable[device.NodeName] = nd
 		}
