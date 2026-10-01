@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster-agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # The agent doesn't elect a leader, so don't run two at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cluster-agent
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "cluster-agent.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: cluster-agent
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: cluster-agent
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --observation-delay={{ .Values.observationDelay }}
+        {{- if .Values.debug }}
+        - --debug
+        {{- end }}
+        ports:
+        - name: metrics
+          containerPort: 8080
+        - name: probes
+          containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: probes
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: probes
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

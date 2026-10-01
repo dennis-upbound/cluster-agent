@@ -1,0 +1,25 @@
+image:
+  repository: xpkg.upbound.io/modelplane/cluster-agent
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Log debug messages.
+debug: false
+
+# How long to wait after the cluster changes before observing its pools.
+# Changes made while waiting are observed together.
+observationDelay: 10s
+
+# The agent caches the nodes, pods and ResourceSlices it observes, so its
+# memory grows with the cluster. There's no limit by default.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

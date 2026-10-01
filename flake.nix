@@ -39,8 +39,8 @@
       # Regenerates deepcopy methods, CRDs and RBAC from the Go source.
       generate = ''
         controller-gen object:headerFile=hack/boilerplate.go.txt paths=./apis/...
-        controller-gen crd paths=./apis/... output:crd:artifacts:config=cluster/crds
-        controller-gen rbac:roleName=cluster-agent paths=./internal/... output:rbac:artifacts:config=cluster/rbac
+        controller-gen crd paths=./apis/... output:crd:artifacts:config=cluster/charts/cluster-agent/crds
+        controller-gen rbac:roleName=cluster-agent paths=./internal/... output:rbac:artifacts:config=cluster/charts/cluster-agent/templates
       '';
 
       build =
@@ -135,6 +135,18 @@
               };
             };
 
+          # The Helm chart, packaged at the agent's version. Helm wants a version
+          # without the v prefix.
+          chart =
+            pkgs.runCommand "cluster-agent-chart-${version}" { nativeBuildInputs = [ pkgs.kubernetes-helm ]; }
+              ''
+                mkdir -p $out
+                helm package ${./cluster/charts/cluster-agent} \
+                  --version ${pkgs.lib.removePrefix "v" version} \
+                  --app-version ${version} \
+                  --destination $out
+              '';
+
           # A check that runs a script against a writable copy of the source.
           check =
             name: nativeBuildInputs: script:
@@ -155,6 +167,7 @@
             modules
             agent
             image
+            chart
             check
             ;
         };
@@ -168,7 +181,7 @@
         in
         {
           default = b.agent native;
-          modules = b.modules;
+          inherit (b) modules chart;
         }
         // builtins.listToAttrs (
           map (a: {
@@ -197,6 +210,12 @@
             popd
             diff -r . $TMPDIR/generated || (echo "Generated files are stale. Run nix run .#generate." && exit 1)
           '';
+          helm-lint =
+            pkgs.runCommand "cluster-agent-helm-lint" { nativeBuildInputs = [ pkgs.kubernetes-helm ]; }
+              ''
+                helm lint --strict ${./cluster/charts/cluster-agent}
+                touch $out
+              '';
           nix-lint = pkgs.runCommand "cluster-agent-nix-lint" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
             nixfmt --check ${./flake.nix}
             touch $out
@@ -264,6 +283,7 @@
             pkgs.golangci-lint
             pkgs.kubernetes-controller-tools
             pkgs.kubectl
+            pkgs.kubernetes-helm
             pkgs.crane
             pkgs.nixfmt
           ];

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: cluster-agent
+description: Observes a Modelplane InferenceCluster and reports what it sees.
+type: application
+# The release process sets both versions when it packages the chart.
+version: 0.0.0
+appVersion: v0.0.0
+home: https://github.com/modelplaneai/cluster-agent

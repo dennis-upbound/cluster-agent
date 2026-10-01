@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-agent
+  labels:
+    {{- include "cluster-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  # Generated from the controllers' RBAC markers. See role.yaml.
+  name: cluster-agent
+subjects:
+- kind: ServiceAccount
+  name: cluster-agent
+  namespace: {{ .Release.Namespace }}
