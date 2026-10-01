@@ -437,9 +437,6 @@ func PendingPods(pods []corev1.Pod, events []corev1.Event) map[string][]PendingP
 // can't compile a selector.
 func (o *Observer) Matches(ctx context.Context, dc resourcev1.DeviceClass, d dra.Device) (bool, error) {
 	for _, s := range dc.Spec.Selectors {
-		if s.CEL == nil {
-			continue
-		}
 		expr := o.cel.GetOrCompile(s.CEL.Expression)
 		if expr.Error != nil {
 			return false, expr.Error

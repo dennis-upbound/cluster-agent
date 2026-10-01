@@ -271,7 +271,7 @@ func TestDeviceClassStatus(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			got := DeviceClassStatus(tc.d)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
+			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("\n%s\nDeviceClassStatus(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})

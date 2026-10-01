@@ -79,9 +79,7 @@ func DeviceClassStatus(d pool.Devices) v1alpha1.DeviceClassStatus {
 	s := v1alpha1.DeviceClassStatus{
 		DeviceClassName: d.DeviceClassName,
 		Nodes:           d.Nodes,
-	}
-	if len(d.Attributes) > 0 {
-		s.Attributes = d.Attributes
+		Attributes:      d.Attributes,
 	}
 
 	nodes := map[int32]int32{}
