@@ -345,7 +345,7 @@ spec:
                         advertises these. One advertising the same hardware a DRA driver
                         publishes gives the two allocators separate books over one set of
                         devices.
-                      maxProperties: 16
+                      maxProperties: 64
                       type: object
                     name:
                       description: 'Name of the pool: the value of its nodes'' modelplane.ai/pool
@@ -387,8 +387,8 @@ spec:
                       type: integer
                     replicas:
                       description: |-
-                        Replicas are the replicas whose devices the pool's device counts
-                        already include. A replica is identified by the modelplane.ai/replica
+                        Replicas are the replicas whose ResourceClaims have allocated devices on
+                        the pool's nodes. A replica is identified by the modelplane.ai/replica
                         label on its ResourceClaims.
                       items:
                         description: |-
