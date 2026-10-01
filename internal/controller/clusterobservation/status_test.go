@@ -296,8 +296,13 @@ func TestHealthy(t *testing.T) {
 		},
 		"Cordoned": {
 			reason: "A pool with a cordoned node is unhealthy.",
-			p:      pool.Observation{Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 1}},
+			p:      pool.Observation{Nodes: pool.Nodes{Total: 2, Ready: 2, Cordoned: 1, Schedulable: 1}},
 			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesCordoned, Message: "1 of 2 nodes cordoned"},
+		},
+		"NotReadyAndCordoned": {
+			reason: "A node that's both not ready and cordoned should be reported as both.",
+			p:      pool.Observation{Nodes: pool.Nodes{Total: 1, Cordoned: 1}},
+			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 1 nodes not ready; 1 of 1 nodes cordoned"},
 		},
 		"Tainted": {
 			reason: "A pool with a tainted device is unhealthy.",
@@ -306,7 +311,7 @@ func TestHealthy(t *testing.T) {
 		},
 		"SeveralProblems": {
 			reason: "The reason should name the first problem, and the message all of them.",
-			p:      pool.Observation{Nodes: pool.Nodes{Total: 4, Ready: 3, Schedulable: 2}, TaintedDevices: 1},
+			p:      pool.Observation{Nodes: pool.Nodes{Total: 4, Ready: 3, Cordoned: 1, Schedulable: 2}, TaintedDevices: 1},
 			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 4 nodes not ready; 1 of 4 nodes cordoned; 1 devices tainted"},
 		},
 	}

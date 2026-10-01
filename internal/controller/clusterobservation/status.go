@@ -111,7 +111,7 @@ func Healthy(p pool.Observation) metav1.Condition {
 		reason = v1alpha1.ReasonNodesNotReady
 		problems = append(problems, fmt.Sprintf("%d of %d nodes not ready", n, p.Nodes.Total))
 	}
-	if n := p.Nodes.Ready - p.Nodes.Schedulable; n > 0 {
+	if n := p.Nodes.Cordoned; n > 0 {
 		reason = cmp.Or(reason, v1alpha1.ReasonNodesCordoned)
 		problems = append(problems, fmt.Sprintf("%d of %d nodes cordoned", n, p.Nodes.Total))
 	}

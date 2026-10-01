@@ -98,8 +98,15 @@ type Observation struct {
 
 // Nodes counts a pool's nodes.
 type Nodes struct {
-	Total       int32
-	Ready       int32
+	Total int32
+
+	// Ready counts the nodes whose Ready condition is True.
+	Ready int32
+
+	// Cordoned counts the nodes marked unschedulable, ready or not.
+	Cordoned int32
+
+	// Schedulable counts the ready nodes that aren't cordoned.
 	Schedulable int32
 }
 
@@ -247,6 +254,9 @@ func CountNodes(nodes []corev1.Node) map[string]Nodes {
 		}
 		c := counts[p]
 		c.Total++
+		if n.Spec.Unschedulable {
+			c.Cordoned++
+		}
 		if IsReady(n) {
 			c.Ready++
 			if !n.Spec.Unschedulable {
