@@ -1,0 +1,43 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-agent
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - agent.modelplane.ai
+  resources:
+  - clusterobservations
+  - replicaobservations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - agent.modelplane.ai
+  resources:
+  - clusterobservations/status
+  - replicaobservations/status
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - resource.k8s.io
+  resources:
+  - deviceclasses
+  - resourceclaims
+  - resourceslices
+  verbs:
+  - get
+  - list
+  - watch
