@@ -3,6 +3,7 @@ module github.com/modelplaneai/cluster-agent
 go 1.26.0
 
 require (
+	github.com/alecthomas/kong v1.16.1
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-cmp v0.7.0
 	k8s.io/api v0.37.1

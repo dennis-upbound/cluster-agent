@@ -34,7 +34,7 @@
           "v0.0.0-${toString self.lastModified}-${self.dirtyShortRev or "dev"}";
 
       # The hash of the Go module dependencies. Refresh it with nix run .#tidy.
-      vendorHash = "sha256-IFfeGaKbSdlUbZIm5kFzh4ztmE2FhaUMrCE5D5+r4NE=";
+      vendorHash = "sha256-LD3ydub0Yq8b+QO3aOZzPK6WOz+PQ50BdobfDH+ZGH0=";
 
       # Regenerates deepcopy methods, CRDs and RBAC from the Go source.
       generate = ''

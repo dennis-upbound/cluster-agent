@@ -19,13 +19,11 @@ limitations under the License.
 package main
 
 import (
-	"context"
-	"flag"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -45,71 +43,51 @@ import (
 	"github.com/modelplaneai/cluster-agent/internal/pool"
 )
 
+type cli struct {
+	Debug                  bool          `help:"Log debug messages." short:"d"`
+	ObservationDelay       time.Duration `default:"10s"              help:"How long to wait after the cluster changes before observing its pools. Changes made while waiting are observed together."`
+	MetricsBindAddress     string        `default:":8080"            help:"The address the metrics endpoint binds to."`
+	HealthProbeBindAddress string        `default:":8081"            help:"The address the health probe endpoint binds to."`
+}
+
 func main() {
-	var (
-		debug   = flag.Bool("debug", false, "Log debug messages.")
-		delay   = flag.Duration("observation-delay", 10*time.Second, "How long to wait after the cluster changes before observing its pools. Changes made while waiting are observed together.")
-		metrics = flag.String("metrics-bind-address", ":8080", "The address the metrics endpoint binds to.")
-		probe   = flag.String("health-probe-bind-address", ":8081", "The address the health probe endpoint binds to.")
+	flags := &cli{}
+	kctx := kong.Parse(flags,
+		kong.Name("cluster-agent"),
+		kong.Description("Observe a Modelplane InferenceCluster and report what it sees."),
+		kong.UsageOnError(),
 	)
-	flag.Parse()
 
 	level := slog.LevelInfo
-	if *debug {
+	if flags.Debug {
 		level = slog.LevelDebug
 	}
 	h := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	log := slog.New(h)
 	ctrl.SetLogger(logr.FromSlogHandler(h))
 
-	if err := run(ctrl.SetupSignalHandler(), log, *delay, *metrics, *probe); err != nil {
-		log.Error("Cluster agent failed", "error", err)
-		os.Exit(1)
-	}
-}
-
-func run(ctx context.Context, log *slog.Logger, delay time.Duration, metrics, probe string) error {
 	s := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(s); err != nil {
-		return fmt.Errorf("cannot add Kubernetes types to scheme: %w", err)
-	}
-	if err := v1alpha1.AddToScheme(s); err != nil {
-		return fmt.Errorf("cannot add observation types to scheme: %w", err)
-	}
+	kctx.FatalIfErrorf(clientgoscheme.AddToScheme(s), "cannot add Kubernetes types to scheme")
+	kctx.FatalIfErrorf(v1alpha1.AddToScheme(s), "cannot add observation types to scheme")
 
 	cfg, err := ctrl.GetConfig()
-	if err != nil {
-		return fmt.Errorf("cannot get Kubernetes client config: %w", err)
-	}
+	kctx.FatalIfErrorf(err, "cannot get Kubernetes client config")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 s,
 		Cache:                  CacheOptions(),
-		Metrics:                metricsserver.Options{BindAddress: metrics},
-		HealthProbeBindAddress: probe,
+		Metrics:                metricsserver.Options{BindAddress: flags.MetricsBindAddress},
+		HealthProbeBindAddress: flags.HealthProbeBindAddress,
 	})
-	if err != nil {
-		return fmt.Errorf("cannot create manager: %w", err)
-	}
+	kctx.FatalIfErrorf(err, "cannot create manager")
 
-	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
-		return fmt.Errorf("cannot add health check: %w", err)
-	}
-	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
-		return fmt.Errorf("cannot add ready check: %w", err)
-	}
+	kctx.FatalIfErrorf(mgr.AddHealthzCheck("ping", healthz.Ping), "cannot add health check")
+	kctx.FatalIfErrorf(mgr.AddReadyzCheck("ping", healthz.Ping), "cannot add ready check")
 
-	if err := clusterobservation.Setup(mgr, log, delay); err != nil {
-		return fmt.Errorf("cannot set up ClusterObservation controller: %w", err)
-	}
-	if err := replicaobservation.Setup(mgr, log); err != nil {
-		return fmt.Errorf("cannot set up ReplicaObservation controller: %w", err)
-	}
+	kctx.FatalIfErrorf(clusterobservation.Setup(mgr, log, flags.ObservationDelay), "cannot set up ClusterObservation controller")
+	kctx.FatalIfErrorf(replicaobservation.Setup(mgr, log), "cannot set up ReplicaObservation controller")
 
-	if err := mgr.Start(ctx); err != nil {
-		return fmt.Errorf("cannot run manager: %w", err)
-	}
-	return nil
+	kctx.FatalIfErrorf(mgr.Start(ctrl.SetupSignalHandler()), "cannot run manager")
 }
 
 // CacheOptions returns options that keep the agent's cache to the objects it
