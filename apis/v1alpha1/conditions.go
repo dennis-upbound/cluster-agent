@@ -1,0 +1,72 @@
+/*
+Copyright 2026 The Modelplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+// Condition types.
+const (
+	// TypeReady is a ClusterObservation's summary condition, and a
+	// ReplicaObservation's.
+	TypeReady = "Ready"
+
+	// TypeHealthy is a pool's health.
+	TypeHealthy = "Healthy"
+
+	// TypeScaleUpBlocked reports whether the cluster autoscaler can add
+	// nodes to a pool for its pending pods.
+	TypeScaleUpBlocked = "ScaleUpBlocked"
+
+	// TypeScheduled reports whether a replica's pods are bound to nodes.
+	TypeScheduled = "Scheduled"
+)
+
+// Reasons for a ClusterObservation's Ready condition.
+const (
+	ReasonObserved          = "Observed"
+	ReasonObservationFailed = "ObservationFailed"
+)
+
+// Reasons for a pool's Healthy condition.
+const (
+	ReasonNodesHealthy   = "NodesHealthy"
+	ReasonNodesNotReady  = "NodesNotReady"
+	ReasonNodesCordoned  = "NodesCordoned"
+	ReasonDevicesTainted = "DevicesTainted"
+)
+
+// Reasons for a pool's ScaleUpBlocked condition.
+const (
+	ReasonNoPendingPods       = "NoPendingPods"
+	ReasonScaleUpTriggered    = "ScaleUpTriggered"
+	ReasonScaleUpNotTriggered = "ScaleUpNotTriggered"
+	ReasonNoAutoscalerEvents  = "NoAutoscalerEvents"
+)
+
+// Reasons for a ReplicaObservation's Scheduled and Ready conditions.
+const (
+	ReasonInvalidPodSelector   = "InvalidPodSelector"
+	ReasonNoPods               = "NoPods"
+	ReasonPodsScheduled        = "PodsScheduled"
+	ReasonUnschedulable        = "Unschedulable"
+	ReasonSchedulingGated      = "SchedulingGated"
+	ReasonSchedulingPending    = "SchedulingPending"
+	ReasonPodsReady            = "PodsReady"
+	ReasonNotScheduled         = "NotScheduled"
+	ReasonImagePullBackOff     = "ImagePullBackOff"
+	ReasonCrashLoopBackOff     = "CrashLoopBackOff"
+	ReasonCreateContainerError = "CreateContainerError"
+	ReasonStarting             = "Starting"
+)
