@@ -56,7 +56,8 @@ const (
 	FieldOwner = "cluster-agent.modelplane.ai"
 )
 
-// A PoolObserver observes a cluster's GPU pools.
+// A PoolObserver observes a cluster's GPU pools. It must not modify its
+// inputs, which the Reconciler reads straight from its cache.
 type PoolObserver interface {
 	ObservePools(ctx context.Context, in pool.Inputs) ([]pool.Observation, error)
 }
@@ -159,30 +160,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot get ClusterObservation: %w", err)
 	}
 
+	// The observer mustn't modify its inputs, so read them straight from the
+	// cache rather than copying them.
 	nodes := &corev1.NodeList{}
-	if err := r.client.List(ctx, nodes, client.HasLabels{pool.LabelPool}); err != nil {
+	if err := r.client.List(ctx, nodes, client.HasLabels{pool.LabelPool}, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list nodes: %w", err)
 	}
-	// ResourceSlices are the largest objects the agent reads, and nothing
-	// modifies them, so read them without copying them out of the cache.
 	rslices := &resourcev1.ResourceSliceList{}
 	if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
 	}
 	classes := &resourcev1.DeviceClassList{}
-	if err := r.client.List(ctx, classes); err != nil {
+	if err := r.client.List(ctx, classes, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list DeviceClasses: %w", err)
 	}
 	claims := &resourcev1.ResourceClaimList{}
-	if err := r.client.List(ctx, claims); err != nil {
+	if err := r.client.List(ctx, claims, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
 	}
 	pods := &corev1.PodList{}
-	if err := r.client.List(ctx, pods, client.HasLabels{replica.LabelReplica}); err != nil {
+	if err := r.client.List(ctx, pods, client.HasLabels{replica.LabelReplica}, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
 	events := &corev1.EventList{}
-	if err := r.client.List(ctx, events); err != nil {
+	if err := r.client.List(ctx, events, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list events: %w", err)
 	}
 

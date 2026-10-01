@@ -55,7 +55,8 @@ const (
 	FieldOwner = "cluster-agent.modelplane.ai"
 )
 
-// A ReplicaObserver observes a replica.
+// A ReplicaObserver observes a replica. It must not modify its inputs, which
+// the Reconciler reads straight from its cache.
 type ReplicaObserver interface {
 	ObserveReplica(in replica.Inputs) replica.Observation
 }
@@ -157,8 +158,10 @@ func ClaimRequests(c client.Reader) handler.MapFunc {
 // RequestsFor returns requests for the ReplicaObservations in the namespace
 // whose pod selector matches the supplied pod labels.
 func RequestsFor(ctx context.Context, c client.Reader, namespace string, podLabels map[string]string) []reconcile.Request {
+	// Nothing here modifies the ReplicaObservations, so read them straight
+	// from the cache rather than copying them.
 	l := &v1alpha1.ReplicaObservationList{}
-	if err := c.List(ctx, l, client.InNamespace(namespace)); err != nil {
+	if err := c.List(ctx, l, client.InNamespace(namespace), client.UnsafeDisableDeepCopy); err != nil {
 		return nil
 	}
 	var reqs []reconcile.Request
@@ -199,16 +202,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, ApplyStatus(ctx, r.client, req.NamespacedName, s)
 	}
 
+	// The observer mustn't modify its inputs, so read them straight from the
+	// cache rather than copying them.
 	pods := &corev1.PodList{}
-	if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}, client.HasLabels{replica.LabelReplica}); err != nil {
+	if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}, client.HasLabels{replica.LabelReplica}, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
 	claims := &resourcev1.ResourceClaimList{}
-	if err := r.client.List(ctx, claims, client.InNamespace(observation.GetNamespace())); err != nil {
+	if err := r.client.List(ctx, claims, client.InNamespace(observation.GetNamespace()), client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
 	}
-	// ResourceSlices are the largest objects the agent reads, and nothing
-	// modifies them, so read them without copying them out of the cache.
 	rslices := &resourcev1.ResourceSliceList{}
 	if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
