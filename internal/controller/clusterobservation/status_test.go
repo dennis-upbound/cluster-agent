@@ -83,6 +83,13 @@ func TestStatus(t *testing.T) {
 							},
 						},
 						ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
+						UnschedulablePods: []pool.UnschedulablePod{
+							{
+								NamespacedName: types.NamespacedName{Namespace: "ml", Name: "llama-1"},
+								ScaleUp:        pool.ScaleUpTriggered,
+								ScaleUpMessage: "pod triggered scale-up: [{gpu 2->3 (max: 4)}]",
+							},
+						},
 					},
 				},
 			},
@@ -110,9 +117,10 @@ func TestStatus(t *testing.T) {
 							},
 						},
 						ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
+						UnschedulablePods: 1,
 						Conditions: []metav1.Condition{
 							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: now},
+							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonScaleUpTriggered, Message: "pod ml/llama-1: pod triggered scale-up: [{gpu 2->3 (max: 4)}]", LastTransitionTime: now},
 						},
 					},
 				},

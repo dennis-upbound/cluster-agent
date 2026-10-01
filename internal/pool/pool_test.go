@@ -531,6 +531,47 @@ func TestDevicesByClass(t *testing.T) {
 	}
 }
 
+func TestTaintedDevices(t *testing.T) {
+	type args struct {
+		devices []dra.Device
+		m       Membership
+	}
+
+	cases := map[string]struct {
+		reason string
+		args   args
+		want   map[string]int32
+	}{
+		"Effects": {
+			reason: "A pool should count its devices with a taint that keeps new claims from allocating them. A taint with no effect, and a device outside a pool, shouldn't count.",
+			args: args{
+				devices: []dra.Device{
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-0"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-0", Taints: []resourcev1.DeviceTaint{{Key: "gpu.nvidia.com/xid", Effect: resourcev1.DeviceTaintEffectNoSchedule}}}},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-1"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-1", Taints: []resourcev1.DeviceTaint{{Key: "gpu.nvidia.com/xid", Effect: resourcev1.DeviceTaintEffectNoExecute}}}},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-2"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-2", Taints: []resourcev1.DeviceTaint{{Key: "gpu.nvidia.com/xid", Effect: resourcev1.DeviceTaintEffectNone}}}},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-3"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-3"}},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "b", Device: "gpu-0"}, NodeName: "b", Spec: resourcev1.Device{Name: "gpu-0", Taints: []resourcev1.DeviceTaint{{Key: "gpu.nvidia.com/xid", Effect: resourcev1.DeviceTaintEffectNoSchedule}}}},
+				},
+				m: Membership{Pool: map[string]string{"a": "gpu"}},
+			},
+			want: map[string]int32{"gpu": 2},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			devices := map[dra.DeviceID]dra.Device{}
+			for _, d := range tc.args.devices {
+				devices[d.ID] = d
+			}
+			got := TaintedDevices(devices, tc.args.m)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("\n%s\nTaintedDevices(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
 func TestLatestScaleUpEvent(t *testing.T) {
 	early := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	late := metav1.NewTime(early.Add(time.Minute))
