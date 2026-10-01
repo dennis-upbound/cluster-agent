@@ -119,11 +119,8 @@ func Observe(in Inputs) Observation {
 	for _, p := range in.Pods {
 		observation.Pods = append(observation.Pods, ObservePod(p))
 
-		for _, cs := range p.Status.ResourceClaimStatuses {
-			if cs.ResourceClaimName == nil {
-				continue
-			}
-			c, ok := claims[p.Namespace+"/"+*cs.ResourceClaimName]
+		for _, name := range ClaimNames(p) {
+			c, ok := claims[p.Namespace+"/"+name]
 			if !ok {
 				continue
 			}
@@ -190,4 +187,25 @@ func ObservePod(p corev1.Pod) Pod {
 	}
 
 	return observed
+}
+
+// ClaimNames returns the names of the ResourceClaims a pod uses: those it
+// names in its spec, those generated from its ResourceClaimTemplates, and the
+// one generated for any extended resources it requests that DRA provides.
+func ClaimNames(p corev1.Pod) []string {
+	var names []string
+	for _, c := range p.Spec.ResourceClaims {
+		if c.ResourceClaimName != nil {
+			names = append(names, *c.ResourceClaimName)
+		}
+	}
+	for _, cs := range p.Status.ResourceClaimStatuses {
+		if cs.ResourceClaimName != nil {
+			names = append(names, *cs.ResourceClaimName)
+		}
+	}
+	if s := p.Status.ExtendedResourceClaimStatus; s != nil {
+		names = append(names, s.ResourceClaimName)
+	}
+	return names
 }

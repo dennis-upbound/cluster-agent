@@ -132,20 +132,26 @@ func PodRequests(c client.Reader) handler.MapFunc {
 }
 
 // ClaimRequests returns a function that maps a ResourceClaim to the
-// ReplicaObservations whose pod selector matches the pod that owns it.
+// ReplicaObservations whose pod selector matches a pod the claim is reserved
+// for. The scheduler reserves a claim for a pod when it allocates the claim.
 func ClaimRequests(c client.Reader) handler.MapFunc {
 	return func(ctx context.Context, o client.Object) []reconcile.Request {
-		for _, ref := range o.GetOwnerReferences() {
-			if ref.APIVersion != "v1" || ref.Kind != "Pod" {
+		claim, ok := o.(*resourcev1.ResourceClaim)
+		if !ok {
+			return nil
+		}
+		var reqs []reconcile.Request
+		for _, ref := range claim.Status.ReservedFor {
+			if ref.APIGroup != "" || ref.Resource != "pods" {
 				continue
 			}
 			pod := &corev1.Pod{}
-			if err := c.Get(ctx, types.NamespacedName{Namespace: o.GetNamespace(), Name: ref.Name}, pod); err != nil {
-				return nil
+			if err := c.Get(ctx, types.NamespacedName{Namespace: claim.GetNamespace(), Name: ref.Name}, pod); err != nil {
+				continue
 			}
-			return RequestsFor(ctx, c, pod.GetNamespace(), pod.GetLabels())
+			reqs = append(reqs, RequestsFor(ctx, c, pod.GetNamespace(), pod.GetLabels())...)
 		}
-		return nil
+		return reqs
 	}
 }
 
