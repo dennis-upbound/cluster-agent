@@ -99,7 +99,8 @@ type Waiting struct {
 type Device struct {
 	ID dra.DeviceID
 
-	// NodeName is the node the device is attached to.
+	// NodeName is the node the device is attached to. It's empty for a device
+	// that isn't attached to one node, or that no ResourceSlice publishes.
 	NodeName string
 
 	// UUID is the device's uuid attribute, when its driver publishes one.
@@ -130,12 +131,10 @@ func Observe(in Inputs) Observation {
 				}
 				allocated[id] = true
 
-				d := Device{ID: id, NodeName: p.Spec.NodeName}
+				d := Device{ID: id}
 				if pd, ok := devices[id]; ok {
+					d.NodeName = pd.NodeName
 					d.UUID, _ = pd.StringAttribute("uuid")
-					if pd.NodeName != "" {
-						d.NodeName = pd.NodeName
-					}
 				}
 				observation.Devices = append(observation.Devices, d)
 			}

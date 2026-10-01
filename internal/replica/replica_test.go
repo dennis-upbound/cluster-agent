@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/modelplaneai/cluster-agent/internal/dra"
 )
@@ -38,14 +39,25 @@ import (
 //   - too-big claims 8 GPUs, so it can't be scheduled.
 //   - bad-image is scheduled but can't pull its image.
 func TestObserve(t *testing.T) {
+	pods := load[corev1.PodList](t, filepath.Join("testdata", "pods.json")).Items
+	claims := load[resourcev1.ResourceClaimList](t, filepath.Join("testdata", "claims.json")).Items
+	rslices := load[resourcev1.ResourceSliceList](t, filepath.Join("testdata", "slices.json")).Items
+
+	// The captured pods, grouped by the replica they belong to.
+	selected := map[string][]corev1.Pod{}
+	for _, p := range pods {
+		r := p.Labels["modelplane.ai/replica"]
+		selected[r] = append(selected[r], p)
+	}
+
 	cases := map[string]struct {
-		reason  string
-		replica string
-		want    Observation
+		reason string
+		in     Inputs
+		want   Observation
 	}{
 		"OneGPU": {
-			reason:  "A running replica should report its pod and the device allocated to it.",
-			replica: "one-gpu",
+			reason: "A running replica should report its pod and the device allocated to it.",
+			in:     Inputs{Pods: selected["one-gpu"], Claims: claims, Slices: rslices},
 			want: Observation{
 				Pods: []Pod{
 					{Name: "one-gpu-57bf7796f9-f6vrt", Scheduling: Scheduled, Ready: true},
@@ -60,8 +72,8 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"TwoGPU": {
-			reason:  "A replica with two devices should report both, sorted.",
-			replica: "two-gpu",
+			reason: "A replica with two devices should report both, sorted.",
+			in:     Inputs{Pods: selected["two-gpu"], Claims: claims, Slices: rslices},
 			want: Observation{
 				Pods: []Pod{
 					{Name: "two-gpu-7f7ff797d7-vs2w9", Scheduling: Scheduled, Ready: true},
@@ -81,8 +93,8 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"Unschedulable": {
-			reason:  "A pod the scheduler can't place should report why, and have no devices.",
-			replica: "too-big",
+			reason: "A pod the scheduler can't place should report why, and have no devices.",
+			in:     Inputs{Pods: selected["too-big"], Claims: claims, Slices: rslices},
 			want: Observation{
 				Pods: []Pod{
 					{
@@ -94,8 +106,8 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"ImagePullBackOff": {
-			reason:  "A scheduled pod whose container can't start should report why it's waiting.",
-			replica: "bad-image",
+			reason: "A scheduled pod whose container can't start should report why it's waiting.",
+			in:     Inputs{Pods: selected["bad-image"], Claims: claims, Slices: rslices},
 			want: Observation{
 				Pods: []Pod{
 					{
@@ -112,24 +124,43 @@ func TestObserve(t *testing.T) {
 				},
 			},
 		},
+		"NetworkAttached": {
+			reason: "A device that isn't attached to one node should report no node, though its pod is on one.",
+			in: Inputs{
+				Pods: []corev1.Pod{{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0"},
+					Spec: corev1.PodSpec{
+						NodeName:       "node-a",
+						ResourceClaims: []corev1.PodResourceClaim{{Name: "nic", ResourceClaimName: new("llama-nic")}},
+					},
+				}},
+				Claims: []resourcev1.ResourceClaim{{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-nic"},
+					Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+						Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+							{Request: "nic", Driver: "nic.example.org", Pool: "fabric", Device: "nic-0"},
+						}},
+					}},
+				}},
+				Slices: []resourcev1.ResourceSlice{{
+					Spec: resourcev1.ResourceSliceSpec{
+						Driver:   "nic.example.org",
+						Pool:     resourcev1.ResourcePool{Name: "fabric", ResourceSliceCount: 1},
+						AllNodes: new(true),
+						Devices:  []resourcev1.Device{{Name: "nic-0"}},
+					},
+				}},
+			},
+			want: Observation{
+				Pods:    []Pod{{Name: "llama-0", Scheduling: Scheduled}},
+				Devices: []Device{{ID: dra.DeviceID{Driver: "nic.example.org", Pool: "fabric", Device: "nic-0"}}},
+			},
+		},
 	}
-
-	pods := load[corev1.PodList](t, filepath.Join("testdata", "pods.json")).Items
-	claims := load[resourcev1.ResourceClaimList](t, filepath.Join("testdata", "claims.json")).Items
-	slices := load[resourcev1.ResourceSliceList](t, filepath.Join("testdata", "slices.json")).Items
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			// Select the replica's pods the way a ReplicaObservation's pod
-			// selector does.
-			var selected []corev1.Pod
-			for _, p := range pods {
-				if p.Labels["modelplane.ai/replica"] == tc.replica {
-					selected = append(selected, p)
-				}
-			}
-
-			got := Observe(Inputs{Pods: selected, Claims: claims, Slices: slices})
+			got := Observe(tc.in)
 			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want, +got:\n%s", tc.reason, diff)
 			}
