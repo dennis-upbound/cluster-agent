@@ -150,8 +150,9 @@ func ClaimRequests(c client.Reader) handler.MapFunc {
 			if ref.APIGroup != "" || ref.Resource != "pods" {
 				continue
 			}
+			// Only the pod's labels are read, so don't copy it out of the cache.
 			pod := &corev1.Pod{}
-			if err := c.Get(ctx, types.NamespacedName{Namespace: claim.GetNamespace(), Name: ref.Name}, pod); err != nil {
+			if err := c.Get(ctx, types.NamespacedName{Namespace: claim.GetNamespace(), Name: ref.Name}, pod, client.UnsafeDisableDeepCopy); err != nil {
 				continue
 			}
 			reqs = append(reqs, RequestsFor(ctx, c, pod.GetNamespace(), pod.GetLabels())...)
