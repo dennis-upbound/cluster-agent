@@ -236,6 +236,41 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 		},
+		"ObserveErrorApplyError": {
+			reason: "An error applying the status that reports a failed observation should be returned.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ClusterObservation{ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.ClusterObservationName}},
+				},
+				interceptor: interceptor.Funcs{
+					SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, _ ...client.SubResourceApplyOption) error {
+						return errBoom
+					},
+				},
+				observeErr: errBoom,
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.ClusterObservationStatus{},
+			},
+		},
+		"StatusRejectedApplyError": {
+			reason: "An error applying the status that reports a rejected status should be returned.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ClusterObservation{ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.ClusterObservationName}},
+				},
+				interceptor: interceptor.Funcs{
+					SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, _ ...client.SubResourceApplyOption) error {
+						return errInvalid
+					},
+				},
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.ClusterObservationStatus{},
+			},
+		},
 		"ApplyError": {
 			reason: "An error applying the status should be returned.",
 			params: params{

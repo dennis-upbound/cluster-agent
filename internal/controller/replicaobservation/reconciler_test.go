@@ -219,6 +219,72 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 		},
+		"InvalidSelectorApplyError": {
+			reason: "An error applying the status that reports an invalid pod selector should be returned.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ReplicaObservation{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama"},
+						Spec: v1alpha1.ReplicaObservationSpec{PodSelector: metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "modelplane.ai/replica", Operator: "Sometimes"}},
+						}},
+					},
+				},
+				interceptor: interceptor.Funcs{
+					SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, _ ...client.SubResourceApplyOption) error {
+						return errBoom
+					},
+				},
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.ReplicaObservationStatus{},
+			},
+		},
+		"GetClaimError": {
+			reason: "An error getting a ResourceClaim a pod names should be returned, without changing the status.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ReplicaObservation{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama"},
+						Spec:       v1alpha1.ReplicaObservationSpec{PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{replica.LabelReplica: "llama"}}},
+					},
+					&corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}},
+						Spec:       corev1.PodSpec{ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("llama-gpu")}}},
+					},
+				},
+				interceptor: interceptor.Funcs{
+					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if _, ok := obj.(*resourcev1.ResourceClaim); ok {
+							return errBoom
+						}
+						return c.Get(ctx, key, obj, opts...)
+					},
+				},
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.ReplicaObservationStatus{},
+			},
+		},
+		"StatusRejectedApplyError": {
+			reason: "An error applying the status that reports a rejected status should be returned.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ReplicaObservation{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama"}},
+				},
+				interceptor: interceptor.Funcs{
+					SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, _ ...client.SubResourceApplyOption) error {
+						return errInvalid
+					},
+				},
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.ReplicaObservationStatus{},
+			},
+		},
 		"ApplyError": {
 			reason: "An error applying the status should be returned.",
 			params: params{
