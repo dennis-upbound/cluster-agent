@@ -64,7 +64,7 @@ type ClusterObservationStatus struct {
 
 	// Pools are the cluster's GPU pools. A pool is every node that carries a
 	// modelplane.ai/pool label with the pool's name. A pool with no nodes
-	// appears when pending pods are pinned to it.
+	// appears when unschedulable pods are pinned to it.
 	//
 	// +optional
 	// +listType=map
@@ -83,12 +83,12 @@ type PoolStatus struct {
 	// Nodes counts the pool's nodes.
 	Nodes NodeCounts `json:"nodes"`
 
-	// PendingPods counts the unschedulable pods pinned to the pool by a
-	// modelplane.ai/pool node selector. Only pods that carry a
-	// modelplane.ai/replica label count.
+	// UnschedulablePods counts the pods pinned to the pool by a
+	// modelplane.ai/pool node selector that the scheduler couldn't find a
+	// node for. Only pods that carry a modelplane.ai/replica label count.
 	//
 	// +kubebuilder:validation:Minimum=0
-	PendingPods int32 `json:"pendingPods"`
+	UnschedulablePods int32 `json:"unschedulablePods"`
 
 	// Devices are the DRA devices the pool's nodes publish, by the
 	// DeviceClass they belong to. A device that belongs to more than one
@@ -124,8 +124,8 @@ type PoolStatus struct {
 	// Conditions of the pool. Healthy is False when any of the pool's nodes
 	// is not ready or cordoned, or any of its devices is tainted.
 	// ScaleUpBlocked is True when the cluster autoscaler reports it can't add
-	// nodes for a pending pod. Each condition's lastTransitionTime is when
-	// its status last changed.
+	// nodes for an unschedulable pod. Each condition's lastTransitionTime is
+	// when its status last changed.
 	//
 	// +optional
 	// +listType=map

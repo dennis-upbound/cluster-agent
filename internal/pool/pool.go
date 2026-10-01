@@ -92,8 +92,9 @@ type Observation struct {
 	// Replicas whose ResourceClaims have allocated the pool's devices, sorted.
 	Replicas []types.NamespacedName
 
-	// PendingPods are the unschedulable pods pinned to the pool, sorted.
-	PendingPods []PendingPod
+	// UnschedulablePods are the pods pinned to the pool that the scheduler
+	// couldn't find a node for, sorted.
+	UnschedulablePods []UnschedulablePod
 }
 
 // Nodes counts a pool's nodes.
@@ -134,7 +135,7 @@ type NodeDevices struct {
 	Allocated int32
 }
 
-// ScaleUp is the cluster autoscaler's latest verdict on a pending pod.
+// ScaleUp is the cluster autoscaler's latest verdict on an unschedulable pod.
 type ScaleUp string
 
 // Cluster autoscaler verdicts.
@@ -151,8 +152,9 @@ const (
 	ScaleUpNotTriggered ScaleUp = "NotTriggered"
 )
 
-// A PendingPod is an unschedulable pod pinned to a pool.
-type PendingPod struct {
+// An UnschedulablePod is a pod pinned to a pool that the scheduler couldn't
+// find a node for.
+type UnschedulablePod struct {
 	types.NamespacedName
 
 	// ScaleUp is the autoscaler's latest verdict on the pod.
@@ -189,7 +191,7 @@ func NewObserver() *Observer {
 
 // ObservePools returns what's true of each pool the supplied objects
 // describe, sorted by name. A pool exists when a node carries its label, or a
-// pending pod is pinned to it.
+// unschedulable pod is pinned to it.
 func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, error) {
 	m := Members(in.Nodes)
 	devices := dra.Devices(in.Slices)
@@ -202,13 +204,13 @@ func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, 
 	tainted := TaintedDevices(devices, m)
 	extended := ExtendedResources(in.Nodes)
 	replicas := Replicas(in.Claims, devices, m)
-	pending := PendingPods(in.Pods, in.Events)
+	unschedulable := UnschedulablePods(in.Pods, in.Events)
 
 	names := map[string]bool{}
 	for p := range nodes {
 		names[p] = true
 	}
-	for p := range pending {
+	for p := range unschedulable {
 		names[p] = true
 	}
 
@@ -221,7 +223,7 @@ func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, 
 			TaintedDevices:    tainted[name],
 			ExtendedResources: extended[name],
 			Replicas:          replicas[name],
-			PendingPods:       pending[name],
+			UnschedulablePods: unschedulable[name],
 		})
 	}
 	return out, nil
@@ -403,17 +405,17 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 	return pools, nil
 }
 
-// PendingPods returns the unschedulable pods pinned to each pool by a
+// UnschedulablePods returns the unschedulable pods pinned to each pool by a
 // modelplane.ai/pool node selector, sorted, with the cluster autoscaler's
 // latest verdict on each.
-func PendingPods(pods []corev1.Pod, events []corev1.Event) map[string][]PendingPod {
-	pending := map[string][]PendingPod{}
+func UnschedulablePods(pods []corev1.Pod, events []corev1.Event) map[string][]UnschedulablePod {
+	unschedulable := map[string][]UnschedulablePod{}
 	for _, pod := range pods {
 		p, ok := pod.Spec.NodeSelector[LabelPool]
 		if !ok || !IsUnschedulable(pod) {
 			continue
 		}
-		pp := PendingPod{
+		pp := UnschedulablePod{
 			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
 			ScaleUp:        ScaleUpUnknown,
 		}
@@ -424,12 +426,12 @@ func PendingPods(pods []corev1.Pod, events []corev1.Event) map[string][]PendingP
 			}
 			pp.ScaleUpMessage = e.Message
 		}
-		pending[p] = append(pending[p], pp)
+		unschedulable[p] = append(unschedulable[p], pp)
 	}
-	for _, pps := range pending {
-		slices.SortFunc(pps, func(a, b PendingPod) int { return compareNamespacedName(a.NamespacedName, b.NamespacedName) })
+	for _, pps := range unschedulable {
+		slices.SortFunc(pps, func(a, b UnschedulablePod) int { return compareNamespacedName(a.NamespacedName, b.NamespacedName) })
 	}
-	return pending
+	return unschedulable
 }
 
 // Matches returns true if the device belongs to the DeviceClass: it does when

@@ -70,12 +70,12 @@ func TestObservePools(t *testing.T) {
 		want     []Observation
 	}{
 		"Full": {
-			reason:   "Every GPU on the node is allocated, and a pool with no nodes appears because a pending pod is pinned to it.",
+			reason:   "Every GPU on the node is allocated, and a pool with no nodes appears because a unschedulable pod is pinned to it.",
 			snapshot: "full",
 			want: []Observation{
 				{
 					Name: "gpu-l4x4",
-					PendingPods: []PendingPod{
+					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
 							ScaleUp:        ScaleUpNotTriggered,
@@ -98,7 +98,7 @@ func TestObservePools(t *testing.T) {
 						{Namespace: "ml-test", Name: "one-gpu"},
 						{Namespace: "ml-test", Name: "two-gpu"},
 					},
-					PendingPods: []PendingPod{
+					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
 							ScaleUp:        ScaleUpNotTriggered,
@@ -118,7 +118,7 @@ func TestObservePools(t *testing.T) {
 			want: []Observation{
 				{
 					Name: "gpu-l4x4",
-					PendingPods: []PendingPod{
+					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
 							ScaleUp:        ScaleUpNotTriggered,
@@ -141,7 +141,7 @@ func TestObservePools(t *testing.T) {
 						{Namespace: "ml-test", Name: "one-gpu"},
 						{Namespace: "ml-test", Name: "two-gpu"},
 					},
-					PendingPods: []PendingPod{
+					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
 							ScaleUp:        ScaleUpNotTriggered,
@@ -161,7 +161,7 @@ func TestObservePools(t *testing.T) {
 			want: []Observation{
 				{
 					Name: "gpu-l4x4",
-					PendingPods: []PendingPod{
+					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
 							ScaleUp:        ScaleUpNotTriggered,
@@ -183,7 +183,7 @@ func TestObservePools(t *testing.T) {
 						{Namespace: "ml-test", Name: "one-gpu"},
 						{Namespace: "ml-test", Name: "two-gpu"},
 					},
-					PendingPods: []PendingPod{
+					UnschedulablePods: []UnschedulablePod{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
 							ScaleUp:        ScaleUpNotTriggered,

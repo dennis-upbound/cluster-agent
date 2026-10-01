@@ -161,7 +161,7 @@ func TestReconcile(t *testing.T) {
 							Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
 							Conditions: []metav1.Condition{
 								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
-								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: now},
+								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: now},
 							},
 						},
 					},

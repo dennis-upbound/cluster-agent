@@ -26,7 +26,7 @@ const (
 	TypeHealthy = "Healthy"
 
 	// TypeScaleUpBlocked reports whether the cluster autoscaler can add
-	// nodes to a pool for its pending pods.
+	// nodes to a pool for its unschedulable pods.
 	TypeScaleUpBlocked = "ScaleUpBlocked"
 
 	// TypeScheduled reports whether a replica's pods are bound to nodes.
@@ -50,7 +50,7 @@ const (
 
 // Reasons for a pool's ScaleUpBlocked condition.
 const (
-	ReasonNoPendingPods       = "NoPendingPods"
+	ReasonNoUnschedulablePods = "NoUnschedulablePods"
 	ReasonScaleUpTriggered    = "ScaleUpTriggered"
 	ReasonScaleUpNotTriggered = "ScaleUpNotTriggered"
 	ReasonNoAutoscalerEvents  = "NoAutoscalerEvents"

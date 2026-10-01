@@ -114,7 +114,7 @@ func TestStatus(t *testing.T) {
 						Replicas:          []v1alpha1.ReplicaReference{{Namespace: "ml", Name: "llama"}},
 						Conditions: []metav1.Condition{
 							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: now},
+							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: now},
 						},
 					},
 				},
@@ -133,7 +133,7 @@ func TestStatus(t *testing.T) {
 							Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 1, Schedulable: 1},
 							Conditions: []metav1.Condition{
 								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 2 nodes not ready", LastTransitionTime: then},
-								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
+								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
 							},
 						},
 					},
@@ -152,7 +152,7 @@ func TestStatus(t *testing.T) {
 						Nodes: v1alpha1.NodeCounts{Total: 3, Ready: 1, Schedulable: 1},
 						Conditions: []metav1.Condition{
 							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "2 of 3 nodes not ready", LastTransitionTime: then},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
+							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
 						},
 					},
 				},
@@ -171,7 +171,7 @@ func TestStatus(t *testing.T) {
 							Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 1, Schedulable: 1},
 							Conditions: []metav1.Condition{
 								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 2 nodes not ready", LastTransitionTime: then},
-								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
+								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
 							},
 						},
 					},
@@ -190,7 +190,7 @@ func TestStatus(t *testing.T) {
 						Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 2, Schedulable: 2},
 						Conditions: []metav1.Condition{
 							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
+							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
 						},
 					},
 				},
@@ -381,14 +381,14 @@ func TestScaleUpBlocked(t *testing.T) {
 		p      pool.Observation
 		want   metav1.Condition
 	}{
-		"NoPendingPods": {
+		"NoUnschedulablePods": {
 			reason: "Scale up isn't blocked when no pods are waiting for it.",
 			p:      pool.Observation{},
-			want:   metav1.Condition{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods},
+			want:   metav1.Condition{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods},
 		},
 		"NotTriggered": {
-			reason: "Scale up is blocked when the autoscaler says it can't add a node for any pending pod.",
-			p: pool.Observation{PendingPods: []pool.PendingPod{
+			reason: "Scale up is blocked when the autoscaler says it can't add a node for any unschedulable pod.",
+			p: pool.Observation{UnschedulablePods: []pool.UnschedulablePod{
 				{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "a"}, ScaleUp: pool.ScaleUpTriggered, ScaleUpMessage: "pod triggered scale-up"},
 				{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "b"}, ScaleUp: pool.ScaleUpNotTriggered, ScaleUpMessage: "pod didn't trigger scale-up"},
 			}},
@@ -396,16 +396,16 @@ func TestScaleUpBlocked(t *testing.T) {
 		},
 		"Triggered": {
 			reason: "Scale up isn't blocked when the autoscaler is adding nodes.",
-			p: pool.Observation{PendingPods: []pool.PendingPod{
+			p: pool.Observation{UnschedulablePods: []pool.UnschedulablePod{
 				{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "a"}, ScaleUp: pool.ScaleUpUnknown},
 				{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "b"}, ScaleUp: pool.ScaleUpTriggered, ScaleUpMessage: "pod triggered scale-up"},
 			}},
 			want: metav1.Condition{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonScaleUpTriggered, Message: "pod ml/b: pod triggered scale-up"},
 		},
 		"NoVerdict": {
-			reason: "Whether scale up is blocked is unknown when no autoscaler has reported on the pending pods.",
-			p:      pool.Observation{PendingPods: []pool.PendingPod{{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "a"}, ScaleUp: pool.ScaleUpUnknown}}},
-			want:   metav1.Condition{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonNoAutoscalerEvents, Message: "1 pods are pending, but no cluster autoscaler has reported on them"},
+			reason: "Whether scale up is blocked is unknown when no autoscaler has reported on the unschedulable pods.",
+			p:      pool.Observation{UnschedulablePods: []pool.UnschedulablePod{{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "a"}, ScaleUp: pool.ScaleUpUnknown}}},
+			want:   metav1.Condition{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonNoAutoscalerEvents, Message: "1 pods are unschedulable, but no cluster autoscaler has reported on them"},
 		},
 	}
 

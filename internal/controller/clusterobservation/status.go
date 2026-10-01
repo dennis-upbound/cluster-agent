@@ -57,7 +57,7 @@ func Status(existing v1alpha1.ClusterObservationStatus, pools []pool.Observation
 				Ready:       p.Nodes.Ready,
 				Schedulable: p.Nodes.Schedulable,
 			},
-			PendingPods:       int32(len(p.PendingPods)), //nolint:gosec // A pool can't approach 2^31 pending pods.
+			UnschedulablePods: int32(len(p.UnschedulablePods)), //nolint:gosec // A pool can't approach 2^31 unschedulable pods.
 			ExtendedResources: p.ExtendedResources,
 			Conditions:        conditions,
 		}
@@ -144,27 +144,27 @@ func Healthy(p pool.Observation) metav1.Condition {
 }
 
 // ScaleUpBlocked returns a pool's ScaleUpBlocked condition. It's True when
-// the cluster autoscaler's latest verdict on any of the pool's pending pods
-// is that it can't add a node for it.
+// the cluster autoscaler's latest verdict on any of the pool's unschedulable
+// pods is that it can't add a node for it.
 func ScaleUpBlocked(p pool.Observation) metav1.Condition {
 	cond := metav1.Condition{Type: v1alpha1.TypeScaleUpBlocked}
 
-	if len(p.PendingPods) == 0 {
+	if len(p.UnschedulablePods) == 0 {
 		cond.Status = metav1.ConditionFalse
-		cond.Reason = v1alpha1.ReasonNoPendingPods
+		cond.Reason = v1alpha1.ReasonNoUnschedulablePods
 		return cond
 	}
 
-	if i := slices.IndexFunc(p.PendingPods, func(pp pool.PendingPod) bool { return pp.ScaleUp == pool.ScaleUpNotTriggered }); i >= 0 {
-		pp := p.PendingPods[i]
+	if i := slices.IndexFunc(p.UnschedulablePods, func(pp pool.UnschedulablePod) bool { return pp.ScaleUp == pool.ScaleUpNotTriggered }); i >= 0 {
+		pp := p.UnschedulablePods[i]
 		cond.Status = metav1.ConditionTrue
 		cond.Reason = v1alpha1.ReasonScaleUpNotTriggered
 		cond.Message = fmt.Sprintf("pod %s: %s", pp.NamespacedName, pp.ScaleUpMessage)
 		return cond
 	}
 
-	if i := slices.IndexFunc(p.PendingPods, func(pp pool.PendingPod) bool { return pp.ScaleUp == pool.ScaleUpTriggered }); i >= 0 {
-		pp := p.PendingPods[i]
+	if i := slices.IndexFunc(p.UnschedulablePods, func(pp pool.UnschedulablePod) bool { return pp.ScaleUp == pool.ScaleUpTriggered }); i >= 0 {
+		pp := p.UnschedulablePods[i]
 		cond.Status = metav1.ConditionFalse
 		cond.Reason = v1alpha1.ReasonScaleUpTriggered
 		cond.Message = fmt.Sprintf("pod %s: %s", pp.NamespacedName, pp.ScaleUpMessage)
@@ -173,6 +173,6 @@ func ScaleUpBlocked(p pool.Observation) metav1.Condition {
 
 	cond.Status = metav1.ConditionUnknown
 	cond.Reason = v1alpha1.ReasonNoAutoscalerEvents
-	cond.Message = fmt.Sprintf("%d pods are pending, but no cluster autoscaler has reported on them", len(p.PendingPods))
+	cond.Message = fmt.Sprintf("%d pods are unschedulable, but no cluster autoscaler has reported on them", len(p.UnschedulablePods))
 	return cond
 }

@@ -8,8 +8,8 @@ with the [Modelplane README](https://github.com/modelplaneai/modelplane).
 The agent reports in the status of two custom resources:
 
 - The `ClusterObservation` named `cluster` reports each GPU pool's nodes, a
-  histogram of nodes by free DRA devices, the pool's pending pods, and whether
-  the cluster autoscaler can add nodes for them.
+  histogram of nodes by free DRA devices, the pool's unschedulable pods, and
+  whether the cluster autoscaler can add nodes for them.
 - A `ReplicaObservation` reports whether a replica's pods are scheduled and
   ready, and the devices allocated to them.
 
