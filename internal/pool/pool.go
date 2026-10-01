@@ -307,13 +307,13 @@ func TaintedDevices(devices map[dra.DeviceID]dra.Device, m Membership) map[strin
 
 // DevicesByClass returns each pool's devices by the DeviceClasses they belong
 // to, sorted by class name.
-func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]dra.Device, classes []resourcev1.DeviceClass, allocated map[dra.DeviceID]bool, m Membership) (map[string][]Devices, error) {
+func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]dra.Device, classes []resourcev1.DeviceClass, allocated map[dra.DeviceID]bool, members Membership) (map[string][]Devices, error) {
 	type poolClass struct{ pool, class string }
 	byClass := map[poolClass]*Devices{}
 	publishes := map[poolClass]map[string]bool{}
 
 	for _, device := range devices {
-		p, ok := m.Pool[device.NodeName]
+		p, ok := members.Pool[device.NodeName]
 		if !ok {
 			continue
 		}
@@ -329,14 +329,18 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 			k := poolClass{pool: p, class: dc.Name}
 			ds, ok := byClass[k]
 			if !ok {
-				ds = &Devices{DeviceClassName: dc.Name, Schedulable: map[string]NodeDevices{}, Attributes: device.Spec.Attributes}
+				// The device's attributes belong to the cache, so narrow a copy.
+				ds = &Devices{DeviceClassName: dc.Name, Schedulable: map[string]NodeDevices{}, Attributes: maps.Clone(device.Spec.Attributes)}
 				byClass[k] = ds
 				publishes[k] = map[string]bool{}
 			}
 			publishes[k][device.NodeName] = true
-			ds.Attributes = Agreed(ds.Attributes, device.Spec.Attributes)
+			maps.DeleteFunc(ds.Attributes, func(name resourcev1.QualifiedName, a resourcev1.DeviceAttribute) bool {
+				b, ok := device.Spec.Attributes[name]
+				return !ok || !equality.Semantic.DeepEqual(a, b)
+			})
 
-			if !m.Schedulable[device.NodeName] {
+			if !members.Schedulable[device.NodeName] {
 				continue
 			}
 			// Record the node even if its devices are all tainted, so it
@@ -417,17 +421,6 @@ func (o *Observer) Matches(ctx context.Context, dc resourcev1.DeviceClass, d dra
 		}
 	}
 	return true, nil
-}
-
-// Agreed returns the attributes of a whose values b shares.
-func Agreed(a, b map[resourcev1.QualifiedName]resourcev1.DeviceAttribute) map[resourcev1.QualifiedName]resourcev1.DeviceAttribute {
-	agreed := make(map[resourcev1.QualifiedName]resourcev1.DeviceAttribute, len(a))
-	for name, va := range a {
-		if vb, ok := b[name]; ok && equality.Semantic.DeepEqual(va, vb) {
-			agreed[name] = va
-		}
-	}
-	return agreed
 }
 
 // IsReady returns true if the node's Ready condition is True.

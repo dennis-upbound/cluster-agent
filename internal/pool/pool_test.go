@@ -189,12 +189,17 @@ func TestObservePools(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := NewObserver().ObservePools(t.Context(), inputs(t, filepath.Join("testdata", tc.snapshot)))
+			in := inputs(t, filepath.Join("testdata", tc.snapshot))
+			got, err := NewObserver().ObservePools(t.Context(), in)
 			if diff := cmp.Diff(nil, err, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObservePools(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty(), equateQuantities); diff != "" {
 				t.Errorf("\n%s\nObservePools(...): -want, +got:\n%s", tc.reason, diff)
+			}
+			// The agent reads inputs straight from its cache.
+			if diff := cmp.Diff(inputs(t, filepath.Join("testdata", tc.snapshot)), in, equateQuantities); diff != "" {
+				t.Errorf("\n%s\nObservePools(...): modified its inputs: -before, +after:\n%s", tc.reason, diff)
 			}
 		})
 	}
