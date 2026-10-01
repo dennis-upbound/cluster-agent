@@ -191,7 +191,9 @@ spec:
                       maxLength: 63
                       type: string
                     nodeName:
-                      description: NodeName is the node the device is attached to.
+                      description: |-
+                        NodeName is the node the device is attached to. It's omitted for a
+                        device that isn't attached to one node, like a network-attached device.
                       maxLength: 253
                       type: string
                     pool:
