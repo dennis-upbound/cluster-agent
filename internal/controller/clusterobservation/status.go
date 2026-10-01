@@ -121,7 +121,7 @@ func Healthy(p pool.Observation) metav1.Condition {
 	}
 
 	if reason == "" {
-		return metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy}
+		return metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy}
 	}
 	return metav1.Condition{
 		Type:    v1alpha1.TypeHealthy,

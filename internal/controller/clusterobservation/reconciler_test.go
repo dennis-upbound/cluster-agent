@@ -161,7 +161,7 @@ func TestReconcile(t *testing.T) {
 							Name:  "gpu",
 							Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
 							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy, LastTransitionTime: now},
+								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
 								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: now},
 							},
 						},
@@ -184,7 +184,7 @@ func TestReconcile(t *testing.T) {
 									Name:  "gpu",
 									Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
 									Conditions: []metav1.Condition{
-										{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy, LastTransitionTime: then},
+										{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: then},
 										{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
 									},
 								},
@@ -211,7 +211,7 @@ func TestReconcile(t *testing.T) {
 							Name:  "gpu",
 							Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
 							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy, LastTransitionTime: then},
+								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: then},
 								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
 							},
 						},

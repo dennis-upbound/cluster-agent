@@ -112,7 +112,7 @@ func TestStatus(t *testing.T) {
 						ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
 						Replicas:          []v1alpha1.ReplicaReference{{Namespace: "ml", Name: "llama"}},
 						Conditions: []metav1.Condition{
-							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy, LastTransitionTime: now},
+							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
 							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: now},
 						},
 					},
@@ -188,7 +188,7 @@ func TestStatus(t *testing.T) {
 						Name:  "gpu",
 						Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 2, Schedulable: 2},
 						Conditions: []metav1.Condition{
-							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy, LastTransitionTime: now},
+							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
 							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
 						},
 					},
@@ -287,12 +287,12 @@ func TestHealthy(t *testing.T) {
 		"Healthy": {
 			reason: "A pool whose nodes are all ready and schedulable, with no tainted devices, is healthy.",
 			p:      pool.Observation{Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2}},
-			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy},
+			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy},
 		},
 		"NoNodes": {
 			reason: "A pool with no nodes has nothing unhealthy in it.",
 			p:      pool.Observation{},
-			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonNodesHealthy},
+			want:   metav1.Condition{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy},
 		},
 		"Cordoned": {
 			reason: "A pool with a cordoned node is unhealthy.",

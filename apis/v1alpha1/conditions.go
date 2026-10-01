@@ -41,7 +41,7 @@ const (
 
 // Reasons for a pool's Healthy condition.
 const (
-	ReasonNodesHealthy   = "NodesHealthy"
+	ReasonPoolHealthy    = "PoolHealthy"
 	ReasonNodesNotReady  = "NodesNotReady"
 	ReasonNodesCordoned  = "NodesCordoned"
 	ReasonDevicesTainted = "DevicesTainted"
