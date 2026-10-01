@@ -367,6 +367,7 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 // modelplane.ai/pool node selector, sorted, with the cluster autoscaler's
 // latest verdict on each.
 func UnschedulablePods(pods []corev1.Pod, events []corev1.Event) map[string][]UnschedulablePod {
+	latest := LatestScaleUpEvents(events)
 	unschedulable := map[string][]UnschedulablePod{}
 	for _, pod := range pods {
 		p, ok := pod.Spec.NodeSelector[LabelPool]
@@ -377,7 +378,7 @@ func UnschedulablePods(pods []corev1.Pod, events []corev1.Event) map[string][]Un
 			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
 			ScaleUp:        ScaleUpUnknown,
 		}
-		if e, ok := LatestScaleUpEvent(events, pod); ok {
+		if e, ok := latest[pod.UID]; ok {
 			pp.ScaleUp = ScaleUpNotTriggered
 			if e.Reason == eventTriggeredScaleUp {
 				pp.ScaleUp = ScaleUpTriggered
@@ -460,28 +461,25 @@ func IsExtendedResource(r corev1.ResourceName) bool {
 	return domain != "kubernetes.io" && !strings.HasSuffix(domain, ".kubernetes.io")
 }
 
-// LatestScaleUpEvent returns the cluster autoscaler's latest scale-up event
-// about the pod.
-func LatestScaleUpEvent(events []corev1.Event, p corev1.Pod) (corev1.Event, bool) {
-	var latest corev1.Event
-	var at time.Time
-	found := false
+// LatestScaleUpEvents returns the cluster autoscaler's latest scale-up event
+// about each pod, keyed by the pod's UID.
+func LatestScaleUpEvents(events []corev1.Event) map[types.UID]corev1.Event {
+	latest := map[types.UID]corev1.Event{}
 	for _, e := range events {
-		if e.InvolvedObject.UID != p.UID {
-			continue
-		}
 		if e.Reason != eventTriggeredScaleUp && e.Reason != eventNotTriggerScaleUp {
 			continue
 		}
+		uid := e.InvolvedObject.UID
 		// Event times have one second precision, so break ties by name
 		// rather than by the order the cache lists events in.
-		t := EventTime(e)
-		if found && (t.Before(at) || t.Equal(at) && e.Name < latest.Name) {
-			continue
+		if l, ok := latest[uid]; ok {
+			if t, lt := EventTime(e), EventTime(l); t.Before(lt) || t.Equal(lt) && e.Name < l.Name {
+				continue
+			}
 		}
-		latest, at, found = e, t, true
+		latest[uid] = e
 	}
-	return latest, found
+	return latest
 }
 
 // EventTime returns when an event last happened. Events reported through the

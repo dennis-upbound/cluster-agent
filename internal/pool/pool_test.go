@@ -572,52 +572,75 @@ func TestTaintedDevices(t *testing.T) {
 	}
 }
 
-func TestLatestScaleUpEvent(t *testing.T) {
+func TestLatestScaleUpEvents(t *testing.T) {
 	early := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	late := metav1.NewTime(early.Add(time.Minute))
-	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{UID: "pod"}}
-
-	type want struct {
-		Event string
-		Found bool
-	}
 
 	cases := map[string]struct {
 		reason string
 		events []corev1.Event
-		want   want
+		want   map[types.UID]corev1.Event
 	}{
-		"Latest": {
-			reason: "The latest scale-up event about the pod should win, whatever order the events are listed in.",
+		"LatestListedFirst": {
+			reason: "The latest scale-up event about a pod should win when it's listed first.",
 			events: []corev1.Event{
 				{ObjectMeta: metav1.ObjectMeta{Name: "late"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
 				{ObjectMeta: metav1.ObjectMeta{Name: "early"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventNotTriggerScaleUp, LastTimestamp: early},
 			},
-			want: want{Event: "late", Found: true},
+			want: map[types.UID]corev1.Event{
+				"pod": {ObjectMeta: metav1.ObjectMeta{Name: "late"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
+			},
 		},
-		"Tie": {
-			reason: "Events that happened in the same second should be broken by name, whatever order they're listed in.",
+		"LatestListedLast": {
+			reason: "The latest scale-up event about a pod should win when it's listed last.",
+			events: []corev1.Event{
+				{ObjectMeta: metav1.ObjectMeta{Name: "early"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventNotTriggerScaleUp, LastTimestamp: early},
+				{ObjectMeta: metav1.ObjectMeta{Name: "late"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
+			},
+			want: map[types.UID]corev1.Event{
+				"pod": {ObjectMeta: metav1.ObjectMeta{Name: "late"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
+			},
+		},
+		"TieListedFirst": {
+			reason: "Of events that happened in the same second, the one with the greater name should win when it's listed first.",
+			events: []corev1.Event{
+				{ObjectMeta: metav1.ObjectMeta{Name: "b"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
+				{ObjectMeta: metav1.ObjectMeta{Name: "a"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventNotTriggerScaleUp, LastTimestamp: late},
+			},
+			want: map[types.UID]corev1.Event{
+				"pod": {ObjectMeta: metav1.ObjectMeta{Name: "b"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
+			},
+		},
+		"TieListedLast": {
+			reason: "Of events that happened in the same second, the one with the greater name should win when it's listed last.",
 			events: []corev1.Event{
 				{ObjectMeta: metav1.ObjectMeta{Name: "a"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventNotTriggerScaleUp, LastTimestamp: late},
 				{ObjectMeta: metav1.ObjectMeta{Name: "b"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
 			},
-			want: want{Event: "b", Found: true},
-		},
-		"Irrelevant": {
-			reason: "Events about other pods, or that aren't scale-up verdicts, shouldn't count.",
-			events: []corev1.Event{
-				{ObjectMeta: metav1.ObjectMeta{Name: "other-pod"}, InvolvedObject: corev1.ObjectReference{UID: "other"}, Reason: eventNotTriggerScaleUp, LastTimestamp: late},
-				{ObjectMeta: metav1.ObjectMeta{Name: "scale-down"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: "ScaleDown", LastTimestamp: late},
+			want: map[types.UID]corev1.Event{
+				"pod": {ObjectMeta: metav1.ObjectMeta{Name: "b"}, InvolvedObject: corev1.ObjectReference{UID: "pod"}, Reason: eventTriggeredScaleUp, LastTimestamp: late},
 			},
-			want: want{Found: false},
+		},
+		"EachPod": {
+			reason: "Each pod should get its own latest event. Events that aren't scale-up verdicts shouldn't count.",
+			events: []corev1.Event{
+				{ObjectMeta: metav1.ObjectMeta{Name: "a"}, InvolvedObject: corev1.ObjectReference{UID: "pod-a"}, Reason: eventNotTriggerScaleUp, LastTimestamp: early},
+				{ObjectMeta: metav1.ObjectMeta{Name: "b"}, InvolvedObject: corev1.ObjectReference{UID: "pod-b"}, Reason: eventTriggeredScaleUp, LastTimestamp: early},
+				{ObjectMeta: metav1.ObjectMeta{Name: "a-scale-down"}, InvolvedObject: corev1.ObjectReference{UID: "pod-a"}, Reason: "ScaleDown", LastTimestamp: late},
+				{ObjectMeta: metav1.ObjectMeta{Name: "c-scale-down"}, InvolvedObject: corev1.ObjectReference{UID: "pod-c"}, Reason: "ScaleDown", LastTimestamp: late},
+			},
+			want: map[types.UID]corev1.Event{
+				"pod-a": {ObjectMeta: metav1.ObjectMeta{Name: "a"}, InvolvedObject: corev1.ObjectReference{UID: "pod-a"}, Reason: eventNotTriggerScaleUp, LastTimestamp: early},
+				"pod-b": {ObjectMeta: metav1.ObjectMeta{Name: "b"}, InvolvedObject: corev1.ObjectReference{UID: "pod-b"}, Reason: eventTriggeredScaleUp, LastTimestamp: early},
+			},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, found := LatestScaleUpEvent(tc.events, pod)
-			if diff := cmp.Diff(tc.want, want{Event: got.Name, Found: found}); diff != "" {
-				t.Errorf("\n%s\nLatestScaleUpEvent(...): -want, +got:\n%s", tc.reason, diff)
+			got := LatestScaleUpEvents(tc.events)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("\n%s\nLatestScaleUpEvents(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}
