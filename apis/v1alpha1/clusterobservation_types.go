@@ -107,11 +107,11 @@ type PoolStatus struct {
 	// devices.
 	//
 	// +optional
-	// +kubebuilder:validation:MaxProperties=16
+	// +kubebuilder:validation:MaxProperties=64
 	ExtendedResources map[corev1.ResourceName]resource.Quantity `json:"extendedResources,omitempty"`
 
-	// Replicas are the replicas whose devices the pool's device counts
-	// already include. A replica is identified by the modelplane.ai/replica
+	// Replicas are the replicas whose ResourceClaims have allocated devices on
+	// the pool's nodes. A replica is identified by the modelplane.ai/replica
 	// label on its ResourceClaims.
 	//
 	// +optional

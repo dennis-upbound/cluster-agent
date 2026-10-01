@@ -67,9 +67,7 @@ type ReplicaObservationStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// Pods counts the replica's pods.
-	//
-	// +optional
-	Pods PodCounts `json:"pods,omitempty"`
+	Pods PodCounts `json:"pods"`
 
 	// Devices are the DRA devices allocated to the replica's pods.
 	//
