@@ -37,15 +37,9 @@ import (
 	"github.com/modelplaneai/cluster-agent/internal/dra"
 )
 
-// Labels Modelplane puts on the objects it composes.
-const (
-	// LabelPool is the node label that names a node's pool. Modelplane pins a
-	// pod to a pool with a node selector on it.
-	LabelPool = "modelplane.ai/pool"
-
-	// LabelReplica is the pod label that names the replica the pod belongs to.
-	LabelReplica = "modelplane.ai/replica"
-)
+// LabelPool is the node label Modelplane sets to the name of a node's pool.
+// Modelplane pins a pod to a pool with a node selector on it.
+const LabelPool = "modelplane.ai/pool"
 
 // Cluster autoscaler pod event reasons. See
 // https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-events-are-emitted-by-ca

@@ -41,6 +41,7 @@ import (
 	"github.com/modelplaneai/cluster-agent/internal/controller/clusterobservation"
 	"github.com/modelplaneai/cluster-agent/internal/controller/replicaobservation"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
+	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
 
 type cli struct {
@@ -102,7 +103,7 @@ func CacheOptions() cache.Options {
 				Transform: StripNode,
 			},
 			&corev1.Pod{}: {
-				Label: labels.NewSelector().Add(exists(pool.LabelReplica)),
+				Label: labels.NewSelector().Add(exists(replica.LabelReplica)),
 			},
 			&corev1.Event{}: {
 				Field: fields.OneTermEqualSelector("source", "cluster-autoscaler"),

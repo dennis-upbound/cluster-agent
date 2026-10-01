@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,12 +41,16 @@ import (
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
+	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
 
 var (
 	errBoom    = errors.New("boom")
 	errInvalid = kerrors.NewInvalid(schema.GroupKind{Group: v1alpha1.Group, Kind: "ClusterObservation"}, v1alpha1.ClusterObservationName, field.ErrorList{field.TooMany(field.NewPath("status", "pools"), 65, 64)})
 )
+
+// The fake client sets a resourceVersion on every object it stores.
+var ignoreResourceVersion = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
 
 func TestReconcile(t *testing.T) {
 	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
@@ -63,11 +68,13 @@ func TestReconcile(t *testing.T) {
 	type params struct {
 		objects     []client.Object
 		interceptor interceptor.Funcs
-		observer    PoolObserver
+		pools       []pool.Observation
+		observeErr  error
 	}
 	type want struct {
 		r      reconcile.Result
 		err    error
+		inputs pool.Inputs
 		status *v1alpha1.ClusterObservationStatus
 	}
 
@@ -125,9 +132,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				},
-				observer: PoolObserverFn(func(_ context.Context, _ pool.Inputs) ([]pool.Observation, error) {
-					return nil, errBoom
-				}),
+				observeErr: errBoom,
 			},
 			want: want{
 				status: &v1alpha1.ClusterObservationStatus{
@@ -140,15 +145,36 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 		},
+		"ReadsPoolsAndReplicas": {
+			reason: "Only nodes in a pool and pods of a replica should be observed.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ClusterObservation{ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.ClusterObservationName}},
+					&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0", Labels: map[string]string{pool.LabelPool: "gpu"}}},
+					&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-0"}},
+					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}},
+					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "coredns-0"}},
+				},
+			},
+			want: want{
+				inputs: pool.Inputs{
+					Nodes: []corev1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0", Labels: map[string]string{pool.LabelPool: "gpu"}}}},
+					Pods:  []corev1.Pod{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}}},
+				},
+				status: &v1alpha1.ClusterObservationStatus{
+					Conditions: []metav1.Condition{
+						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: now},
+					},
+				},
+			},
+		},
 		"AppliesStatus": {
 			reason: "The observed pools should be applied to the ClusterObservation's status.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.ClusterObservation{ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.ClusterObservationName}},
 				},
-				observer: PoolObserverFn(func(_ context.Context, _ pool.Inputs) ([]pool.Observation, error) {
-					return []pool.Observation{{Name: "gpu", Nodes: pool.Nodes{Total: 1, Ready: 1, Schedulable: 1}}}, nil
-				}),
+				pools: []pool.Observation{{Name: "gpu", Nodes: pool.Nodes{Total: 1, Ready: 1, Schedulable: 1}}},
 			},
 			want: want{
 				status: &v1alpha1.ClusterObservationStatus{
@@ -197,9 +223,7 @@ func TestReconcile(t *testing.T) {
 						return c.SubResource(sub).Apply(ctx, obj, opts...)
 					},
 				},
-				observer: PoolObserverFn(func(_ context.Context, _ pool.Inputs) ([]pool.Observation, error) {
-					return []pool.Observation{{Name: "gpu", Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2}}}, nil
-				}),
+				pools: []pool.Observation{{Name: "gpu", Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2}}},
 			},
 			want: want{
 				status: &v1alpha1.ClusterObservationStatus{
@@ -223,9 +247,6 @@ func TestReconcile(t *testing.T) {
 						return errBoom
 					},
 				},
-				observer: PoolObserverFn(func(_ context.Context, _ pool.Inputs) ([]pool.Observation, error) {
-					return nil, nil
-				}),
 			},
 			want: want{
 				err:    cmpopts.AnyError,
@@ -243,16 +264,21 @@ func TestReconcile(t *testing.T) {
 				WithInterceptorFuncs(tc.params.interceptor).
 				Build()
 
-			r := NewReconciler(c, WithPoolObserver(tc.params.observer))
+			var inputs pool.Inputs
+			r := NewReconciler(c, WithPoolObserver(PoolObserverFn(func(_ context.Context, in pool.Inputs) ([]pool.Observation, error) {
+				inputs = in
+				return tc.params.pools, tc.params.observeErr
+			})))
 			got, err := r.Reconcile(t.Context(), req)
-
 			if diff := cmp.Diff(tc.want.err, err, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nr.Reconcile(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 			if diff := cmp.Diff(tc.want.r, got); diff != "" {
 				t.Errorf("\n%s\nr.Reconcile(...): -want, +got:\n%s", tc.reason, diff)
 			}
-
+			if diff := cmp.Diff(tc.want.inputs, inputs, cmpopts.EquateEmpty(), ignoreResourceVersion); diff != "" {
+				t.Errorf("\n%s\nr.Reconcile(...): -want observed inputs, +got observed inputs:\n%s", tc.reason, diff)
+			}
 			var status *v1alpha1.ClusterObservationStatus
 			co := &v1alpha1.ClusterObservation{}
 			if err := c.Get(t.Context(), req.NamespacedName, co); err == nil {

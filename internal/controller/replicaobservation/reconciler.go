@@ -200,7 +200,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	pods := &corev1.PodList{}
-	if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+	if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}, client.HasLabels{replica.LabelReplica}); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
 	claims := &resourcev1.ResourceClaimList{}

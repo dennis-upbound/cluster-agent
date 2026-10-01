@@ -48,6 +48,9 @@ var (
 	errInvalid = kerrors.NewInvalid(schema.GroupKind{Group: v1alpha1.Group, Kind: "ReplicaObservation"}, "llama", field.ErrorList{field.TooMany(field.NewPath("status", "devices"), 4097, 4096)})
 )
 
+// The fake client sets a resourceVersion on every object it stores.
+var ignoreResourceVersion = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
+
 func TestReconcile(t *testing.T) {
 	now := metav1.Now()
 	req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "llama"}}
@@ -63,11 +66,12 @@ func TestReconcile(t *testing.T) {
 	type params struct {
 		objects     []client.Object
 		interceptor interceptor.Funcs
-		observer    ReplicaObserver
+		observation replica.Observation
 	}
 	type want struct {
 		r      reconcile.Result
 		err    error
+		inputs replica.Inputs
 		status *v1alpha1.ReplicaObservationStatus
 	}
 
@@ -120,15 +124,57 @@ func TestReconcile(t *testing.T) {
 				status: &v1alpha1.ReplicaObservationStatus{},
 			},
 		},
+		"ReadsReplica": {
+			reason: "Only the replica's pods, and ResourceClaims in its namespace, should be observed. A pod the selector matches that isn't part of a replica shouldn't be.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ReplicaObservation{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama", Generation: 1},
+						Spec:       v1alpha1.ReplicaObservationSpec{PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "llama"}}},
+					},
+					&corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{"app": "llama", replica.LabelReplica: "llama"}},
+						Status:     corev1.PodStatus{ResourceClaimStatuses: []corev1.PodResourceClaimStatus{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}}},
+					},
+					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0", Labels: map[string]string{"app": "qwen", replica.LabelReplica: "qwen"}}},
+					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-debug", Labels: map[string]string{"app": "llama"}}},
+					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "other", Name: "llama-0", Labels: map[string]string{"app": "llama", replica.LabelReplica: "llama"}}},
+					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
+					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0-gpu"}},
+					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "other", Name: "llama-0-gpu"}},
+					&resourcev1.ResourceSlice{ObjectMeta: metav1.ObjectMeta{Name: "node-a-gpu"}, Spec: resourcev1.ResourceSliceSpec{Driver: "gpu.nvidia.com", Pool: resourcev1.ResourcePool{Name: "node-a"}}},
+				},
+			},
+			want: want{
+				inputs: replica.Inputs{
+					Pods: []corev1.Pod{{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{"app": "llama", replica.LabelReplica: "llama"}},
+						Status:     corev1.PodStatus{ResourceClaimStatuses: []corev1.PodResourceClaimStatus{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}}},
+					}},
+					Claims: []resourcev1.ResourceClaim{
+						{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
+						{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0-gpu"}},
+					},
+					Slices: []resourcev1.ResourceSlice{
+						{ObjectMeta: metav1.ObjectMeta{Name: "node-a-gpu"}, Spec: resourcev1.ResourceSliceSpec{Driver: "gpu.nvidia.com", Pool: resourcev1.ResourcePool{Name: "node-a"}}},
+					},
+				},
+				status: &v1alpha1.ReplicaObservationStatus{
+					ObservedGeneration: 1,
+					Conditions: []metav1.Condition{
+						{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPods, ObservedGeneration: 1, LastTransitionTime: now},
+						{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPods, ObservedGeneration: 1, LastTransitionTime: now},
+					},
+				},
+			},
+		},
 		"AppliesStatus": {
 			reason: "The observed replica should be applied to the ReplicaObservation's status.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.ReplicaObservation{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama", Generation: 1}},
 				},
-				observer: ReplicaObserverFn(func(_ replica.Inputs) replica.Observation {
-					return replica.Observation{Pods: []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}}}
-				}),
+				observation: replica.Observation{Pods: []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}}},
 			},
 			want: want{
 				status: &v1alpha1.ReplicaObservationStatus{
@@ -160,9 +206,7 @@ func TestReconcile(t *testing.T) {
 						return c.SubResource(sub).Apply(ctx, obj, opts...)
 					},
 				},
-				observer: ReplicaObserverFn(func(_ replica.Inputs) replica.Observation {
-					return replica.Observation{Pods: []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}}}
-				}),
+				observation: replica.Observation{Pods: []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}}},
 			},
 			want: want{
 				status: &v1alpha1.ReplicaObservationStatus{
@@ -185,9 +229,6 @@ func TestReconcile(t *testing.T) {
 						return errBoom
 					},
 				},
-				observer: ReplicaObserverFn(func(_ replica.Inputs) replica.Observation {
-					return replica.Observation{}
-				}),
 			},
 			want: want{
 				err:    cmpopts.AnyError,
@@ -205,16 +246,21 @@ func TestReconcile(t *testing.T) {
 				WithInterceptorFuncs(tc.params.interceptor).
 				Build()
 
-			r := NewReconciler(c, WithReplicaObserver(tc.params.observer))
+			var inputs replica.Inputs
+			r := NewReconciler(c, WithReplicaObserver(ReplicaObserverFn(func(in replica.Inputs) replica.Observation {
+				inputs = in
+				return tc.params.observation
+			})))
 			got, err := r.Reconcile(t.Context(), req)
-
 			if diff := cmp.Diff(tc.want.err, err, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nr.Reconcile(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 			if diff := cmp.Diff(tc.want.r, got); diff != "" {
 				t.Errorf("\n%s\nr.Reconcile(...): -want, +got:\n%s", tc.reason, diff)
 			}
-
+			if diff := cmp.Diff(tc.want.inputs, inputs, cmpopts.EquateEmpty(), ignoreResourceVersion); diff != "" {
+				t.Errorf("\n%s\nr.Reconcile(...): -want observed inputs, +got observed inputs:\n%s", tc.reason, diff)
+			}
 			var status *v1alpha1.ReplicaObservationStatus
 			ro := &v1alpha1.ReplicaObservation{}
 			if err := c.Get(t.Context(), req.NamespacedName, ro); err == nil {

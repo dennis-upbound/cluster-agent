@@ -29,6 +29,10 @@ import (
 	"github.com/modelplaneai/cluster-agent/internal/dra"
 )
 
+// LabelReplica is the pod label Modelplane sets to the name of the replica a
+// pod belongs to.
+const LabelReplica = "modelplane.ai/replica"
+
 // Inputs are the objects Observe observes.
 type Inputs struct {
 	// Pods are the replica's pods.

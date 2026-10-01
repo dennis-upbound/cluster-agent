@@ -41,6 +41,7 @@ import (
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
+	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
 
 // +kubebuilder:rbac:groups="",resources=nodes;pods;events,verbs=get;list;watch
@@ -159,7 +160,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	nodes := &corev1.NodeList{}
-	if err := r.client.List(ctx, nodes); err != nil {
+	if err := r.client.List(ctx, nodes, client.HasLabels{pool.LabelPool}); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list nodes: %w", err)
 	}
 	// ResourceSlices are the largest objects the agent reads, and nothing
@@ -177,7 +178,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
 	}
 	pods := &corev1.PodList{}
-	if err := r.client.List(ctx, pods); err != nil {
+	if err := r.client.List(ctx, pods, client.HasLabels{replica.LabelReplica}); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
 	events := &corev1.EventList{}
