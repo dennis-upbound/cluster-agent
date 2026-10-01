@@ -73,6 +73,20 @@ func Status(existing v1alpha1.ClusterObservationStatus, pools []pool.Observation
 	return status
 }
 
+// FailedStatus returns the ClusterObservation status that reports the supplied
+// error. Its Ready condition becomes False, so whoever reads the existing
+// pools it keeps knows they're stale.
+func FailedStatus(existing v1alpha1.ClusterObservationStatus, err error) v1alpha1.ClusterObservationStatus {
+	status := *existing.DeepCopy()
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:    v1alpha1.TypeReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  v1alpha1.ReasonObservationFailed,
+		Message: err.Error(),
+	})
+	return status
+}
+
 // DeviceClassStatus returns the status that reports a pool's devices of one
 // class.
 func DeviceClassStatus(d pool.Devices) v1alpha1.DeviceClassStatus {

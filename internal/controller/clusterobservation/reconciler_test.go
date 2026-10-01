@@ -110,7 +110,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		"ObserveError": {
-			reason: "A failed observation should be returned, and reported as Ready False while keeping the stale pools.",
+			reason: "A failed observation should be reported as Ready False, keeping the stale pools, rather than retried.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.ClusterObservation{
@@ -130,7 +130,6 @@ func TestReconcile(t *testing.T) {
 				}),
 			},
 			want: want{
-				err: cmpopts.AnyError,
 				status: &v1alpha1.ClusterObservationStatus{
 					Conditions: []metav1.Condition{
 						{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonObservationFailed, Message: "cannot observe pools: boom", LastTransitionTime: now},
@@ -170,7 +169,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		"StatusRejected": {
-			reason: "A status the API server rejects as invalid should be reported as Ready False, keeping the stale pools.",
+			reason: "A status the API server rejects as invalid should be reported as Ready False, keeping the stale pools, rather than retried.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.ClusterObservation{
@@ -203,7 +202,6 @@ func TestReconcile(t *testing.T) {
 				}),
 			},
 			want: want{
-				err: cmpopts.AnyError,
 				status: &v1alpha1.ClusterObservationStatus{
 					Conditions: []metav1.Condition{
 						{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonObservationFailed, Message: "cannot apply status: " + errInvalid.Error(), LastTransitionTime: now},

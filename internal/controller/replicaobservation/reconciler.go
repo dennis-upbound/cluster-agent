@@ -190,33 +190,40 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot get ReplicaObservation: %w", err)
 	}
 
-	var s v1alpha1.ReplicaObservationStatus
 	sel, err := metav1.LabelSelectorAsSelector(&observation.Spec.PodSelector)
 	if err != nil {
 		// Whoever wrote the selector has to fix it, and their fix will
-		// trigger a reconcile, so report the problem rather than retrying.
-		s = InvalidSelectorStatus(observation.Status, observation.GetGeneration(), err)
-	} else {
-		pods := &corev1.PodList{}
-		if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}); err != nil {
-			return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
-		}
-		claims := &resourcev1.ResourceClaimList{}
-		if err := r.client.List(ctx, claims, client.InNamespace(observation.GetNamespace())); err != nil {
-			return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
-		}
-		// ResourceSlices are the largest objects the agent reads, and nothing
-		// modifies them, so read them without copying them out of the cache.
-		rslices := &resourcev1.ResourceSliceList{}
-		if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
-			return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
-		}
-
-		o := r.observer.ObserveReplica(replica.Inputs{Pods: pods.Items, Claims: claims.Items, Slices: rslices.Items})
-		s = Status(observation.Status, observation.GetGeneration(), o)
+		// trigger a reconcile.
+		log.Debug("Invalid pod selector", "error", err)
+		s := FailedStatus(observation.Status, observation.GetGeneration(), v1alpha1.ReasonInvalidPodSelector, err)
+		return reconcile.Result{}, ApplyStatus(ctx, r.client, req.NamespacedName, s)
 	}
 
-	if err := ApplyStatus(ctx, r.client, types.NamespacedName{Namespace: observation.GetNamespace(), Name: observation.GetName()}, s); err != nil {
+	pods := &corev1.PodList{}
+	if err := r.client.List(ctx, pods, client.InNamespace(observation.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
+	}
+	claims := &resourcev1.ResourceClaimList{}
+	if err := r.client.List(ctx, claims, client.InNamespace(observation.GetNamespace())); err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
+	}
+	// ResourceSlices are the largest objects the agent reads, and nothing
+	// modifies them, so read them without copying them out of the cache.
+	rslices := &resourcev1.ResourceSliceList{}
+	if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
+	}
+
+	o := r.observer.ObserveReplica(replica.Inputs{Pods: pods.Items, Claims: claims.Items, Slices: rslices.Items})
+	err = ApplyStatus(ctx, r.client, req.NamespacedName, Status(observation.Status, observation.GetGeneration(), o))
+	if kerrors.IsInvalid(err) {
+		// The API server rejects a status that exceeds the schema's bounds,
+		// and will until the replica changes.
+		log.Debug("Status was rejected", "error", err)
+		s := FailedStatus(observation.Status, observation.GetGeneration(), v1alpha1.ReasonObservationFailed, err)
+		return reconcile.Result{}, ApplyStatus(ctx, r.client, req.NamespacedName, s)
+	}
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -224,17 +231,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, nil
 }
 
-// ApplyStatus applies the supplied status to the named ReplicaObservation.
-// The status is applied whole, so fields it omits are removed.
-func ApplyStatus(ctx context.Context, c client.Client, nn types.NamespacedName, s v1alpha1.ReplicaObservationStatus) error {
+// ApplyStatus applies the supplied status to the ReplicaObservation with the
+// supplied key. The status is applied whole, so fields it omits are removed.
+func ApplyStatus(ctx context.Context, c client.Client, key client.ObjectKey, s v1alpha1.ReplicaObservationStatus) error {
 	status, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&s)
 	if err != nil {
 		return fmt.Errorf("cannot convert status to unstructured: %w", err)
 	}
 	u := &unstructured.Unstructured{Object: map[string]any{"status": status}}
 	u.SetGroupVersionKind(v1alpha1.ReplicaObservationGroupVersionKind)
-	u.SetNamespace(nn.Namespace)
-	u.SetName(nn.Name)
+	u.SetNamespace(key.Namespace)
+	u.SetName(key.Name)
 	if err := c.Status().Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership); err != nil {
 		return fmt.Errorf("cannot apply status: %w", err)
 	}

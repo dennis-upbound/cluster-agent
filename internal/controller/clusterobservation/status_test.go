@@ -17,6 +17,7 @@ limitations under the License.
 package clusterobservation
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -220,6 +221,54 @@ func TestStatus(t *testing.T) {
 			got := Status(tc.args.existing, tc.args.pools)
 			if diff := cmp.Diff(tc.want, got, equateNow, equateQuantities); diff != "" {
 				t.Errorf("\n%s\nStatus(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestFailedStatus(t *testing.T) {
+	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	now := metav1.Now()
+
+	type args struct {
+		existing v1alpha1.ClusterObservationStatus
+		err      error
+	}
+
+	cases := map[string]struct {
+		reason string
+		args   args
+		want   v1alpha1.ClusterObservationStatus
+	}{
+		"KeepsStalePools": {
+			reason: "A failed observation should make Ready False, and keep the pools the last successful one reported.",
+			args: args{
+				existing: v1alpha1.ClusterObservationStatus{
+					Conditions: []metav1.Condition{
+						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
+					},
+					Pools: []v1alpha1.PoolStatus{
+						{Name: "gpu", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
+					},
+				},
+				err: errors.New("boom"),
+			},
+			want: v1alpha1.ClusterObservationStatus{
+				Conditions: []metav1.Condition{
+					{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", LastTransitionTime: now},
+				},
+				Pools: []v1alpha1.PoolStatus{
+					{Name: "gpu", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := FailedStatus(tc.args.existing, tc.args.err)
+			if diff := cmp.Diff(tc.want, got, equateNow); diff != "" {
+				t.Errorf("\n%s\nFailedStatus(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}

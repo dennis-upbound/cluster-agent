@@ -77,9 +77,10 @@ func Status(existing v1alpha1.ReplicaObservationStatus, generation int64, observ
 	return status
 }
 
-// InvalidSelectorStatus returns the ReplicaObservation status that reports
-// its pod selector is invalid.
-func InvalidSelectorStatus(existing v1alpha1.ReplicaObservationStatus, generation int64, err error) v1alpha1.ReplicaObservationStatus {
+// FailedStatus returns the ReplicaObservation status that reports the replica
+// couldn't be observed, for the supplied reason. Its conditions become
+// Unknown, and it reports no pods or devices.
+func FailedStatus(existing v1alpha1.ReplicaObservationStatus, generation int64, reason string, err error) v1alpha1.ReplicaObservationStatus {
 	// Condition is a struct of values, so a shallow clone is a deep copy.
 	status := v1alpha1.ReplicaObservationStatus{
 		ObservedGeneration: generation,
@@ -89,7 +90,7 @@ func InvalidSelectorStatus(existing v1alpha1.ReplicaObservationStatus, generatio
 		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
 			Type:               t,
 			Status:             metav1.ConditionUnknown,
-			Reason:             v1alpha1.ReasonInvalidPodSelector,
+			Reason:             reason,
 			Message:            err.Error(),
 			ObservedGeneration: generation,
 		})

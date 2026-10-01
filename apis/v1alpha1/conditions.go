@@ -33,7 +33,8 @@ const (
 	TypeScheduled = "Scheduled"
 )
 
-// Reasons for a ClusterObservation's Ready condition.
+// Reasons for a ClusterObservation's Ready condition. A ReplicaObservation's
+// conditions use ReasonObservationFailed too.
 const (
 	ReasonObserved          = "Observed"
 	ReasonObservationFailed = "ObservationFailed"

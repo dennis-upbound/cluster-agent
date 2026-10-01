@@ -27,8 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -196,50 +194,42 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		Events:  events.Items,
 	})
 	if err != nil {
-		return reconcile.Result{}, ReportFailure(ctx, r.client, observation, fmt.Errorf("cannot observe pools: %w", err))
+		// Observing the same objects again would fail again. A change to
+		// any of them triggers a reconcile.
+		log.Debug("Cannot observe pools", "error", err)
+		s := FailedStatus(observation.Status, fmt.Errorf("cannot observe pools: %w", err))
+		return reconcile.Result{}, ApplyStatus(ctx, r.client, req.NamespacedName, s)
 	}
 
-	s := Status(observation.Status, pools)
-	if err := ApplyStatus(ctx, r.client, observation.GetName(), s); err != nil {
+	err = ApplyStatus(ctx, r.client, req.NamespacedName, Status(observation.Status, pools))
+	if kerrors.IsInvalid(err) {
 		// The API server rejects a status that exceeds the schema's bounds,
-		// and retrying won't help until the cluster changes.
-		if kerrors.IsInvalid(err) {
-			return reconcile.Result{}, ReportFailure(ctx, r.client, observation, err)
-		}
+		// and will until the cluster changes.
+		log.Debug("Status was rejected", "error", err)
+		s := FailedStatus(observation.Status, err)
+		return reconcile.Result{}, ApplyStatus(ctx, r.client, req.NamespacedName, s)
+	}
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	log.Debug("Applied status", "pools", len(s.Pools))
+	log.Debug("Applied status", "pools", len(pools))
 	return reconcile.Result{}, nil
 }
 
-// ApplyStatus applies the supplied status to the named ClusterObservation.
-// The status is applied whole, so fields it omits are removed.
-func ApplyStatus(ctx context.Context, c client.Client, name string, s v1alpha1.ClusterObservationStatus) error {
+// ApplyStatus applies the supplied status to the ClusterObservation with the
+// supplied key. The status is applied whole, so fields it omits are removed.
+func ApplyStatus(ctx context.Context, c client.Client, key client.ObjectKey, s v1alpha1.ClusterObservationStatus) error {
 	status, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&s)
 	if err != nil {
 		return fmt.Errorf("cannot convert status to unstructured: %w", err)
 	}
 	u := &unstructured.Unstructured{Object: map[string]any{"status": status}}
 	u.SetGroupVersionKind(v1alpha1.ClusterObservationGroupVersionKind)
-	u.SetName(name)
+	u.SetNamespace(key.Namespace)
+	u.SetName(key.Name)
 	if err := c.Status().Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership); err != nil {
 		return fmt.Errorf("cannot apply status: %w", err)
 	}
 	return nil
-}
-
-// ReportFailure marks the ClusterObservation not ready because of the supplied
-// error, so whoever reads its pools knows they're stale. It returns the error,
-// ignoring any error reporting it.
-func ReportFailure(ctx context.Context, c client.Client, co *v1alpha1.ClusterObservation, err error) error {
-	s := *co.Status.DeepCopy()
-	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
-		Type:    v1alpha1.TypeReady,
-		Status:  metav1.ConditionFalse,
-		Reason:  v1alpha1.ReasonObservationFailed,
-		Message: err.Error(),
-	})
-	_ = ApplyStatus(ctx, c, co.GetName(), s)
-	return err
 }

@@ -117,13 +117,14 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-func TestInvalidSelectorStatus(t *testing.T) {
+func TestFailedStatus(t *testing.T) {
 	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	now := metav1.Now()
 
 	type args struct {
 		existing   v1alpha1.ReplicaObservationStatus
 		generation int64
+		reason     string
 		err        error
 	}
 
@@ -132,8 +133,8 @@ func TestInvalidSelectorStatus(t *testing.T) {
 		args   args
 		want   v1alpha1.ReplicaObservationStatus
 	}{
-		"InvalidSelector": {
-			reason: "An invalid selector should make both conditions unknown, and clear the observed pods and devices.",
+		"Failed": {
+			reason: "A failed observation should make both conditions unknown for the supplied reason, and clear the observed pods and devices.",
 			args: args{
 				existing: v1alpha1.ReplicaObservationStatus{
 					ObservedGeneration: 1,
@@ -145,6 +146,7 @@ func TestInvalidSelectorStatus(t *testing.T) {
 					Devices: []v1alpha1.AllocatedDevice{{Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0"}},
 				},
 				generation: 2,
+				reason:     v1alpha1.ReasonInvalidPodSelector,
 				err:        errors.New("boom"),
 			},
 			want: v1alpha1.ReplicaObservationStatus{
@@ -159,9 +161,9 @@ func TestInvalidSelectorStatus(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := InvalidSelectorStatus(tc.args.existing, tc.args.generation, tc.args.err)
+			got := FailedStatus(tc.args.existing, tc.args.generation, tc.args.reason, tc.args.err)
 			if diff := cmp.Diff(tc.want, got, equateNow); diff != "" {
-				t.Errorf("\n%s\nInvalidSelectorStatus(...): -want, +got:\n%s", tc.reason, diff)
+				t.Errorf("\n%s\nFailedStatus(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}
