@@ -117,7 +117,8 @@ type AllocatedDevice struct {
 	Device string `json:"device"`
 
 	// NodeName is the node the device is attached to. It's omitted for a
-	// device that isn't attached to one node, like a network-attached device.
+	// device that isn't attached to one node, like a network-attached device,
+	// or that no ResourceSlice currently publishes.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxLength=253
