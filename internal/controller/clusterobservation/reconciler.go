@@ -26,7 +26,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -201,10 +200,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	s := Status(observation.Status, pools)
-	if equality.Semantic.DeepEqual(s, observation.Status) {
-		log.Debug("Status is unchanged")
-		return reconcile.Result{}, nil
-	}
 	if err := ApplyStatus(ctx, r.client, observation.GetName(), s); err != nil {
 		// The API server rejects a status that exceeds the schema's bounds,
 		// and retrying won't help until the cluster changes.
@@ -245,8 +240,6 @@ func ReportFailure(ctx context.Context, c client.Client, co *v1alpha1.ClusterObs
 		Reason:  v1alpha1.ReasonObservationFailed,
 		Message: err.Error(),
 	})
-	if !equality.Semantic.DeepEqual(s, co.Status) {
-		_ = ApplyStatus(ctx, c, co.GetName(), s)
-	}
+	_ = ApplyStatus(ctx, c, co.GetName(), s)
 	return err
 }

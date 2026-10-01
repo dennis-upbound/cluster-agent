@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -42,7 +41,6 @@ import (
 var errBoom = errors.New("boom")
 
 func TestReconcile(t *testing.T) {
-	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	now := metav1.Now()
 	req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "llama"}}
 
@@ -130,42 +128,6 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsScheduled, ObservedGeneration: 1, LastTransitionTime: now},
 						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsReady, ObservedGeneration: 1, LastTransitionTime: now},
-					},
-					Pods: v1alpha1.PodCounts{Total: 1, Scheduled: 1, Ready: 1},
-				},
-			},
-		},
-		"StatusUnchanged": {
-			reason: "A status that already reports what was observed shouldn't be applied again.",
-			params: params{
-				objects: []client.Object{
-					&v1alpha1.ReplicaObservation{
-						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama", Generation: 1},
-						Status: v1alpha1.ReplicaObservationStatus{
-							ObservedGeneration: 1,
-							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsScheduled, ObservedGeneration: 1, LastTransitionTime: then},
-								{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsReady, ObservedGeneration: 1, LastTransitionTime: then},
-							},
-							Pods: v1alpha1.PodCounts{Total: 1, Scheduled: 1, Ready: 1},
-						},
-					},
-				},
-				interceptor: interceptor.Funcs{
-					SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, _ ...client.SubResourceApplyOption) error {
-						return errBoom
-					},
-				},
-				observer: ReplicaObserverFn(func(_ replica.Inputs) replica.Observation {
-					return replica.Observation{Pods: []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}}}
-				}),
-			},
-			want: want{
-				status: &v1alpha1.ReplicaObservationStatus{
-					ObservedGeneration: 1,
-					Conditions: []metav1.Condition{
-						{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsScheduled, ObservedGeneration: 1, LastTransitionTime: then},
-						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsReady, ObservedGeneration: 1, LastTransitionTime: then},
 					},
 					Pods: v1alpha1.PodCounts{Total: 1, Scheduled: 1, Ready: 1},
 				},

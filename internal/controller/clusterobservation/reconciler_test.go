@@ -169,56 +169,6 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 		},
-		"StatusUnchanged": {
-			reason: "A status that already reports what was observed shouldn't be applied again.",
-			params: params{
-				objects: []client.Object{
-					&v1alpha1.ClusterObservation{
-						ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.ClusterObservationName},
-						Status: v1alpha1.ClusterObservationStatus{
-							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
-							},
-							Pools: []v1alpha1.PoolStatus{
-								{
-									Name:  "gpu",
-									Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
-									Conditions: []metav1.Condition{
-										{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: then},
-										{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
-									},
-								},
-							},
-						},
-					},
-				},
-				interceptor: interceptor.Funcs{
-					SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, _ ...client.SubResourceApplyOption) error {
-						return errBoom
-					},
-				},
-				observer: PoolObserverFn(func(_ context.Context, _ pool.Inputs) ([]pool.Observation, error) {
-					return []pool.Observation{{Name: "gpu", Nodes: pool.Nodes{Total: 1, Ready: 1, Schedulable: 1}}}, nil
-				}),
-			},
-			want: want{
-				status: &v1alpha1.ClusterObservationStatus{
-					Conditions: []metav1.Condition{
-						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
-					},
-					Pools: []v1alpha1.PoolStatus{
-						{
-							Name:  "gpu",
-							Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
-							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: then},
-								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
-							},
-						},
-					},
-				},
-			},
-		},
 		"StatusRejected": {
 			reason: "A status the API server rejects as invalid should be reported as Ready False, keeping the stale pools.",
 			params: params{

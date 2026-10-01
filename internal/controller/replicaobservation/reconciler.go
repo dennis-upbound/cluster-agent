@@ -26,7 +26,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -217,10 +216,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		s = Status(observation.Status, observation.GetGeneration(), o)
 	}
 
-	if equality.Semantic.DeepEqual(s, observation.Status) {
-		log.Debug("Status is unchanged")
-		return reconcile.Result{}, nil
-	}
 	if err := ApplyStatus(ctx, r.client, types.NamespacedName{Namespace: observation.GetNamespace(), Name: observation.GetName()}, s); err != nil {
 		return reconcile.Result{}, err
 	}
