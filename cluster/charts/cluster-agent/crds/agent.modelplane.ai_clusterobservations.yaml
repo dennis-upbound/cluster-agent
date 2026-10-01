@@ -377,34 +377,6 @@ spec:
                       - schedulable
                       - total
                       type: object
-                    replicas:
-                      description: |-
-                        Replicas are the replicas whose ResourceClaims have allocated devices on
-                        the pool's nodes. A replica is identified by the modelplane.ai/replica
-                        label on its ResourceClaims.
-                      items:
-                        description: |-
-                          A ReplicaReference identifies a replica by the namespace and value of the
-                          modelplane.ai/replica label on its ResourceClaims.
-                        properties:
-                          name:
-                            description: Name of the replica.
-                            maxLength: 63
-                            type: string
-                          namespace:
-                            description: Namespace of the replica's ResourceClaims.
-                            maxLength: 63
-                            type: string
-                        required:
-                        - name
-                        - namespace
-                        type: object
-                      maxItems: 4096
-                      type: array
-                      x-kubernetes-list-map-keys:
-                      - namespace
-                      - name
-                      x-kubernetes-list-type: map
                     unschedulablePods:
                       description: |-
                         UnschedulablePods counts the pods pinned to the pool by a
