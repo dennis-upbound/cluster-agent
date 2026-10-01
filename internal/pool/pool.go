@@ -180,7 +180,7 @@ func NewObserver() *Observer {
 }
 
 // ObservePools returns what's true of each pool the supplied objects
-// describe, sorted by name. A pool exists when a node carries its label, or a
+// describe, sorted by name. A pool exists when a node carries its label, or an
 // unschedulable pod is pinned to it.
 func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, error) {
 	m := Members(in.Nodes)

@@ -40,8 +40,8 @@ import (
 // node for want of capacity. Workloads in the ml-test namespace claim GPUs:
 //
 //   - full: two one-gpu pods and a two-gpu pod have allocated all 4 GPUs.
-//     too-big claims 8 GPUs and stocked-out is pinned to gpu-l4x4, so both
-//     are pending.
+//     too-big claims 8 GPUs and stocked-out is pinned to gpu-l4x4, so neither
+//     can be scheduled.
 //   - partial: as full, with one one-gpu pod, so 3 GPUs are allocated.
 //   - cordoned: as partial, with the GPU node cordoned.
 //
@@ -70,7 +70,7 @@ func TestObservePools(t *testing.T) {
 		want     []Observation
 	}{
 		"Full": {
-			reason:   "Every GPU on the node is allocated, and a pool with no nodes appears because a unschedulable pod is pinned to it.",
+			reason:   "Every GPU on the node is allocated, and a pool with no nodes appears because an unschedulable pod is pinned to it.",
 			snapshot: "full",
 			want: []Observation{
 				{
