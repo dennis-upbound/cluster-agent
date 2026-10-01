@@ -35,6 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -110,6 +111,10 @@ func Setup(mgr ctrl.Manager, log *slog.Logger) error {
 	c := mgr.GetClient()
 	err := ctrl.NewControllerManagedBy(mgr).
 		Named("replicaobservation").
+		// Replicas are independent, and a reconcile spends most of its time
+		// waiting on the API server to apply a status, so observe several at
+		// once.
+		WithOptions(controller.Options{MaxConcurrentReconciles: 10}).
 		For(&v1alpha1.ReplicaObservation{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(PodRequests(c))).
 		// The scheduler allocates a pod's claims before it binds the pod,
