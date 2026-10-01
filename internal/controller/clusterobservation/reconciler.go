@@ -195,21 +195,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		Events:  events.Items,
 	})
 	if err != nil {
-		err = fmt.Errorf("cannot observe pools: %w", err)
-
-		// Report the failure, so whoever reads the pools knows they're
-		// stale. The returned error is what matters, so ignore any error
-		// reporting it.
-		s := *observation.Status.DeepCopy()
-		meta.SetStatusCondition(&s.Conditions, metav1.Condition{
-			Type:    v1alpha1.TypeReady,
-			Status:  metav1.ConditionFalse,
-			Reason:  v1alpha1.ReasonObservationFailed,
-			Message: err.Error(),
-		})
-		_ = ApplyStatus(ctx, r.client, observation.GetName(), s)
-
-		return reconcile.Result{}, err
+		return reconcile.Result{}, ReportFailure(ctx, r.client, observation, fmt.Errorf("cannot observe pools: %w", err))
 	}
 
 	s := Status(observation.Status, pools)
@@ -218,6 +204,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 	if err := ApplyStatus(ctx, r.client, observation.GetName(), s); err != nil {
+		// The API server rejects a status that exceeds the schema's bounds,
+		// and retrying won't help until the cluster changes.
+		if kerrors.IsInvalid(err) {
+			return reconcile.Result{}, ReportFailure(ctx, r.client, observation, err)
+		}
 		return reconcile.Result{}, err
 	}
 
@@ -239,4 +230,21 @@ func ApplyStatus(ctx context.Context, c client.Client, name string, s v1alpha1.C
 		return fmt.Errorf("cannot apply status: %w", err)
 	}
 	return nil
+}
+
+// ReportFailure marks the ClusterObservation not ready because of the supplied
+// error, so whoever reads its pools knows they're stale. It returns the error,
+// ignoring any error reporting it.
+func ReportFailure(ctx context.Context, c client.Client, co *v1alpha1.ClusterObservation, err error) error {
+	s := *co.Status.DeepCopy()
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:    v1alpha1.TypeReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  v1alpha1.ReasonObservationFailed,
+		Message: err.Error(),
+	})
+	if !equality.Semantic.DeepEqual(s, co.Status) {
+		_ = ApplyStatus(ctx, c, co.GetName(), s)
+	}
+	return err
 }

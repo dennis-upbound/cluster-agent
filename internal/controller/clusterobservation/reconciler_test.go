@@ -18,15 +18,20 @@ package clusterobservation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -37,7 +42,10 @@ import (
 	"github.com/modelplaneai/cluster-agent/internal/pool"
 )
 
-var errBoom = errors.New("boom")
+var (
+	errBoom    = errors.New("boom")
+	errInvalid = kerrors.NewInvalid(schema.GroupKind{Group: v1alpha1.Group, Kind: "ClusterObservation"}, v1alpha1.ClusterObservationName, field.ErrorList{field.TooMany(field.NewPath("status", "pools"), 65, 64)})
+)
 
 func TestReconcile(t *testing.T) {
 	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
@@ -207,6 +215,51 @@ func TestReconcile(t *testing.T) {
 								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoPendingPods, LastTransitionTime: then},
 							},
 						},
+					},
+				},
+			},
+		},
+		"StatusRejected": {
+			reason: "A status the API server rejects as invalid should be reported as Ready False, keeping the stale pools.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ClusterObservation{
+						ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.ClusterObservationName},
+						Status: v1alpha1.ClusterObservationStatus{
+							Conditions: []metav1.Condition{
+								{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
+							},
+							Pools: []v1alpha1.PoolStatus{
+								{Name: "gpu", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
+							},
+						},
+					},
+				},
+				interceptor: interceptor.Funcs{
+					// Reject any status that doesn't report the failure.
+					SubResourceApply: func(ctx context.Context, c client.Client, sub string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+						j, err := json.Marshal(obj)
+						if err != nil {
+							return err
+						}
+						if !strings.Contains(string(j), v1alpha1.ReasonObservationFailed) {
+							return errInvalid
+						}
+						return c.SubResource(sub).Apply(ctx, obj, opts...)
+					},
+				},
+				observer: PoolObserverFn(func(_ context.Context, _ pool.Inputs) ([]pool.Observation, error) {
+					return []pool.Observation{{Name: "gpu", Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2}}}, nil
+				}),
+			},
+			want: want{
+				err: cmpopts.AnyError,
+				status: &v1alpha1.ClusterObservationStatus{
+					Conditions: []metav1.Condition{
+						{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonObservationFailed, Message: "cannot apply status: " + errInvalid.Error(), LastTransitionTime: now},
+					},
+					Pools: []v1alpha1.PoolStatus{
+						{Name: "gpu", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
 					},
 				},
 			},
