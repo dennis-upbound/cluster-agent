@@ -38,7 +38,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
-	"github.com/modelplaneai/cluster-agent/internal/controller/clusterobservation"
+	"github.com/modelplaneai/cluster-agent/internal/controller/poolobservation"
 	"github.com/modelplaneai/cluster-agent/internal/controller/replicaobservation"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
 	"github.com/modelplaneai/cluster-agent/internal/replica"
@@ -85,7 +85,7 @@ func main() {
 	kctx.FatalIfErrorf(mgr.AddHealthzCheck("ping", healthz.Ping), "cannot add health check")
 	kctx.FatalIfErrorf(mgr.AddReadyzCheck("ping", healthz.Ping), "cannot add ready check")
 
-	kctx.FatalIfErrorf(clusterobservation.Setup(mgr, log, flags.ObservationDelay), "cannot set up ClusterObservation controller")
+	kctx.FatalIfErrorf(poolobservation.Setup(mgr, log, flags.ObservationDelay), "cannot set up ClusterObservation controller")
 	kctx.FatalIfErrorf(replicaobservation.Setup(mgr, log), "cannot set up ReplicaObservation controller")
 
 	kctx.FatalIfErrorf(mgr.Start(ctrl.SetupSignalHandler()), "cannot run manager")

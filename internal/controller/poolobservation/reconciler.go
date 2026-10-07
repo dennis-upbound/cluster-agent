@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterobservation reports the state of a cluster's GPU pools in
+// Package poolobservation reports the state of a cluster's GPU pools in
 // the status of its ClusterObservation.
-package clusterobservation
+package poolobservation
 
 import (
 	"context"
