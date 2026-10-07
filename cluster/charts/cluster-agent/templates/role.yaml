@@ -17,7 +17,7 @@ rules:
 - apiGroups:
   - agent.modelplane.ai
   resources:
-  - clusterobservations
+  - poolobservations
   - replicaobservations
   verbs:
   - get
@@ -26,7 +26,7 @@ rules:
 - apiGroups:
   - agent.modelplane.ai
   resources:
-  - clusterobservations/status
+  - poolobservations/status
   - replicaobservations/status
   verbs:
   - get
