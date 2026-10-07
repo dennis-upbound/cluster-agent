@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
+	resourcev1 "k8s.io/api/resource/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -158,7 +159,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		"ReadsPool": {
-			reason: "Only the pool's nodes and pods of a replica should be observed, for the pool the spec names.",
+			reason: "The pool the spec names should be observed, from its nodes, the pods of replicas, and every ResourceSlice, DeviceClass, ResourceClaim and event.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.PoolObservation{ObjectMeta: meta, Spec: spec},
@@ -167,14 +168,22 @@ func TestReconcile(t *testing.T) {
 					&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-0"}},
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}},
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "coredns-0"}},
+					&resourcev1.ResourceSlice{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0-gpu"}},
+					&resourcev1.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "gpu.nvidia.com"}},
+					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
+					&corev1.Event{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0.scale-up"}},
 				},
 			},
 			want: want{
 				observed: observed{
 					Pool: "gpu",
 					Inputs: pool.Inputs{
-						Nodes: []corev1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0", Labels: map[string]string{pool.LabelPool: "gpu"}}}},
-						Pods:  []corev1.Pod{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}}},
+						Nodes:   []corev1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0", Labels: map[string]string{pool.LabelPool: "gpu"}}}},
+						Slices:  []resourcev1.ResourceSlice{{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0-gpu"}}},
+						Classes: []resourcev1.DeviceClass{{ObjectMeta: metav1.ObjectMeta{Name: "gpu.nvidia.com"}}},
+						Claims:  []resourcev1.ResourceClaim{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}}},
+						Pods:    []corev1.Pod{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}}},
+						Events:  []corev1.Event{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0.scale-up"}}},
 					},
 				},
 				status: &v1alpha1.PoolObservationStatus{

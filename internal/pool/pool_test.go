@@ -64,9 +64,13 @@ var l4Attributes = map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
 }
 
 func TestObservePool(t *testing.T) {
+	full := inputs(t, filepath.Join("testdata", "full"))
+	partial := inputs(t, filepath.Join("testdata", "partial"))
+	cordoned := inputs(t, filepath.Join("testdata", "cordoned"))
+
 	type args struct {
-		snapshot string
-		pool     string
+		pool string
+		in   Inputs
 	}
 
 	cases := map[string]struct {
@@ -76,7 +80,7 @@ func TestObservePool(t *testing.T) {
 	}{
 		"Full": {
 			reason: "Every GPU on the node is allocated.",
-			args:   args{snapshot: "full", pool: "gpu-l4x4-a"},
+			args:   args{pool: "gpu-l4x4-a", in: full},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
 				Devices: []Devices{
@@ -98,7 +102,7 @@ func TestObservePool(t *testing.T) {
 		},
 		"Partial": {
 			reason: "A node with one GPU free should report it.",
-			args:   args{snapshot: "partial", pool: "gpu-l4x4-a"},
+			args:   args{pool: "gpu-l4x4-a", in: partial},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
 				Devices: []Devices{
@@ -120,7 +124,7 @@ func TestObservePool(t *testing.T) {
 		},
 		"Cordoned": {
 			reason: "A cordoned node's devices should count toward the nodes that publish them, but not toward what's allocatable.",
-			args:   args{snapshot: "cordoned", pool: "gpu-l4x4-a"},
+			args:   args{pool: "gpu-l4x4-a", in: cordoned},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Cordoned: 1, Schedulable: 0},
 				Devices: []Devices{
@@ -141,7 +145,7 @@ func TestObservePool(t *testing.T) {
 		},
 		"NoNodes": {
 			reason: "A pool with no nodes should report only the pods pinned to it. The autoscaler's latest event about a pod should win.",
-			args:   args{snapshot: "cordoned", pool: "gpu-l4x4"},
+			args:   args{pool: "gpu-l4x4", in: cordoned},
 			want: Observation{
 				UnschedulablePods: []UnschedulablePod{
 					{
@@ -154,22 +158,42 @@ func TestObservePool(t *testing.T) {
 		},
 		"NoDevices": {
 			reason: "A pool whose nodes publish no devices should report only its nodes.",
-			args:   args{snapshot: "full", pool: "system"},
+			args:   args{pool: "system", in: full},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
 			},
 		},
 		"UnknownPool": {
 			reason: "A pool no node or pod names should report nothing.",
-			args:   args{snapshot: "full", pool: "nonexistent"},
+			args:   args{pool: "nonexistent", in: full},
 			want:   Observation{},
+		},
+		"OtherPoolsExtendedResources": {
+			reason: "Only the pool's nodes should count toward its extended resources.",
+			args: args{
+				pool: "gpu",
+				in: Inputs{Nodes: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "gpu-0", Labels: map[string]string{LabelPool: "gpu"}},
+						Status:     corev1.NodeStatus{Allocatable: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")}},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "gpu-spot-0", Labels: map[string]string{LabelPool: "gpu-spot"}},
+						Status:     corev1.NodeStatus{Allocatable: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")}},
+					},
+				}},
+			},
+			want: Observation{
+				Nodes:             Nodes{Total: 1},
+				ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")},
+			},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			in := inputs(t, filepath.Join("testdata", tc.args.snapshot))
-			got, err := NewObserver().ObservePool(t.Context(), tc.args.pool, in)
+			before := deepCopy(tc.args.in)
+			got, err := NewObserver().ObservePool(t.Context(), tc.args.pool, tc.args.in)
 			if diff := cmp.Diff(nil, err, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObservePool(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -177,7 +201,7 @@ func TestObservePool(t *testing.T) {
 				t.Errorf("\n%s\nObservePool(...): -want, +got:\n%s", tc.reason, diff)
 			}
 			// The agent reads inputs straight from its cache.
-			if diff := cmp.Diff(inputs(t, filepath.Join("testdata", tc.args.snapshot)), in, equateQuantities); diff != "" {
+			if diff := cmp.Diff(before, tc.args.in, equateQuantities); diff != "" {
 				t.Errorf("\n%s\nObservePool(...): modified its inputs: -before, +after:\n%s", tc.reason, diff)
 			}
 		})
@@ -353,6 +377,29 @@ func inputs(t *testing.T, dir string) Inputs {
 	}
 }
 
+func deepCopy(in Inputs) Inputs {
+	out := Inputs{}
+	for i := range in.Nodes {
+		out.Nodes = append(out.Nodes, *in.Nodes[i].DeepCopy())
+	}
+	for i := range in.Slices {
+		out.Slices = append(out.Slices, *in.Slices[i].DeepCopy())
+	}
+	for i := range in.Classes {
+		out.Classes = append(out.Classes, *in.Classes[i].DeepCopy())
+	}
+	for i := range in.Claims {
+		out.Claims = append(out.Claims, *in.Claims[i].DeepCopy())
+	}
+	for i := range in.Pods {
+		out.Pods = append(out.Pods, *in.Pods[i].DeepCopy())
+	}
+	for i := range in.Events {
+		out.Events = append(out.Events, *in.Events[i].DeepCopy())
+	}
+	return out
+}
+
 func load[T any](t *testing.T, path string) T {
 	t.Helper()
 	var v T
@@ -378,10 +425,10 @@ func TestCountNodes(t *testing.T) {
 		"States": {
 			reason: "Each node should count by whether it's ready and cordoned.",
 			nodes: []corev1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "ready", Labels: map[string]string{LabelPool: "gpu"}}, Status: ready},
-				{ObjectMeta: metav1.ObjectMeta{Name: "cordoned", Labels: map[string]string{LabelPool: "gpu"}}, Spec: corev1.NodeSpec{Unschedulable: true}, Status: ready},
-				{ObjectMeta: metav1.ObjectMeta{Name: "draining", Labels: map[string]string{LabelPool: "gpu"}}, Spec: corev1.NodeSpec{Unschedulable: true}, Status: notReady},
-				{ObjectMeta: metav1.ObjectMeta{Name: "no-condition", Labels: map[string]string{LabelPool: "gpu"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "ready"}, Status: ready},
+				{ObjectMeta: metav1.ObjectMeta{Name: "cordoned"}, Spec: corev1.NodeSpec{Unschedulable: true}, Status: ready},
+				{ObjectMeta: metav1.ObjectMeta{Name: "draining"}, Spec: corev1.NodeSpec{Unschedulable: true}, Status: notReady},
+				{ObjectMeta: metav1.ObjectMeta{Name: "no-condition"}},
 			},
 			want: Nodes{Total: 4, Ready: 2, Cordoned: 2, Schedulable: 1},
 		},
@@ -407,14 +454,14 @@ func TestExtendedResources(t *testing.T) {
 			reason: "Extended resources should be summed across a pool's nodes, whatever their state, and native resources ignored.",
 			nodes: []corev1.Node{
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "a", Labels: map[string]string{LabelPool: "gpu"}},
+					ObjectMeta: metav1.ObjectMeta{Name: "a"},
 					Status: corev1.NodeStatus{Allocatable: corev1.ResourceList{
 						corev1.ResourceCPU: resource.MustParse("48"),
 						"nvidia.com/gpu":   resource.MustParse("4"),
 					}},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "b", Labels: map[string]string{LabelPool: "gpu"}},
+					ObjectMeta: metav1.ObjectMeta{Name: "b"},
 					Spec:       corev1.NodeSpec{Unschedulable: true},
 					Status:     corev1.NodeStatus{Allocatable: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")}},
 				},
@@ -425,7 +472,7 @@ func TestExtendedResources(t *testing.T) {
 			reason: "A pool whose nodes advertise only native resources has no extended resources.",
 			nodes: []corev1.Node{
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "c", Labels: map[string]string{LabelPool: "system"}},
+					ObjectMeta: metav1.ObjectMeta{Name: "c"},
 					Status:     corev1.NodeStatus{Allocatable: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4")}},
 				},
 			},
