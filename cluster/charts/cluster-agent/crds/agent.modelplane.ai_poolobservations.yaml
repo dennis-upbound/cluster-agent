@@ -56,11 +56,15 @@ spec:
               poolName:
                 description: |-
                   PoolName is the pool's name: the value of its nodes' modelplane.ai/pool
-                  label, and of the node selector that pins a pod to the pool.
+                  label, and of the node selector that pins a pod to the pool. It can't be
+                  changed.
                 maxLength: 63
                 minLength: 1
                 pattern: ^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$
                 type: string
+                x-kubernetes-validations:
+                - message: poolName is immutable
+                  rule: self == oldSelf
             required:
             - poolName
             type: object
