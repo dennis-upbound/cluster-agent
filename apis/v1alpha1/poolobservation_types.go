@@ -45,11 +45,13 @@ type PoolObservation struct {
 // PoolObservationSpec specifies which pool to observe.
 type PoolObservationSpec struct {
 	// PoolName is the pool's name: the value of its nodes' modelplane.ai/pool
-	// label, and of the node selector that pins a pod to the pool.
+	// label, and of the node selector that pins a pod to the pool. It can't be
+	// changed.
 	//
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="poolName is immutable"
 	PoolName string `json:"poolName"`
 }
 
