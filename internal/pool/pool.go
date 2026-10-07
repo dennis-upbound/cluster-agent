@@ -14,9 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package pool observes a cluster's GPU pools: the nodes Modelplane labels
-// with a pool name, the DRA devices they publish, and the pods waiting for
-// them.
+// Package pool observes a GPU pool: the nodes Modelplane labels with the
+// pool's name, the DRA devices they publish, and the pods waiting for them.
 package pool
 
 import (
@@ -52,8 +51,9 @@ const (
 // keeps. A cluster has a handful of DeviceClasses.
 const celCacheSize = 128
 
-// Inputs are the objects an Observer observes. Every pod, node, slice and
-// claim is considered, so callers decide which ones are relevant.
+// Inputs are the objects an Observer observes. Only the observed pool's nodes,
+// the devices they publish, and the pods pinned to the pool count, so callers
+// may supply objects from the whole cluster.
 type Inputs struct {
 	Nodes   []corev1.Node
 	Slices  []resourcev1.ResourceSlice
@@ -63,11 +63,8 @@ type Inputs struct {
 	Events  []corev1.Event
 }
 
-// An Observation is what's true of one pool.
+// An Observation is what's true of a pool.
 type Observation struct {
-	// Name of the pool.
-	Name string
-
 	// Nodes counts the pool's nodes.
 	Nodes Nodes
 
@@ -154,12 +151,12 @@ type UnschedulablePod struct {
 	ScaleUpMessage string
 }
 
-// Membership records which pool each node belongs to.
+// Membership records which nodes are in a pool.
 type Membership struct {
-	// Pool maps the name of each node in a pool to the pool's name.
-	Pool map[string]string
+	// Nodes is the set of the pool's nodes.
+	Nodes map[string]bool
 
-	// Schedulable is the set of nodes in a pool that are ready and not
+	// Schedulable is the set of the pool's nodes that are ready and not
 	// cordoned.
 	Schedulable map[string]bool
 }
@@ -179,54 +176,37 @@ func NewObserver() *Observer {
 	})}
 }
 
-// ObservePools returns what's true of each pool the supplied objects
-// describe, sorted by name. A pool exists when a node carries its label, or an
-// unschedulable pod is pinned to it.
-func (o *Observer) ObservePools(ctx context.Context, in Inputs) ([]Observation, error) {
-	m := Members(in.Nodes)
+// ObservePool returns what's true of the named pool. A pool's nodes are those
+// whose modelplane.ai/pool label is its name.
+func (o *Observer) ObservePool(ctx context.Context, name string, in Inputs) (Observation, error) {
+	var nodes []corev1.Node
+	for _, n := range in.Nodes {
+		if n.Labels[LabelPool] == name {
+			nodes = append(nodes, n)
+		}
+	}
+	m := Members(nodes)
 	devices := dra.Devices(in.Slices)
 
 	byClass, err := o.DevicesByClass(ctx, devices, in.Classes, Allocated(in.Claims), m)
 	if err != nil {
-		return nil, err
+		return Observation{}, err
 	}
-	nodes := CountNodes(in.Nodes)
-	tainted := TaintedDevices(devices, m)
-	extended := ExtendedResources(in.Nodes)
-	unschedulable := UnschedulablePods(in.Pods, in.Events)
-
-	names := map[string]bool{}
-	for p := range nodes {
-		names[p] = true
-	}
-	for p := range unschedulable {
-		names[p] = true
-	}
-
-	out := make([]Observation, 0, len(names))
-	for _, name := range slices.Sorted(maps.Keys(names)) {
-		out = append(out, Observation{
-			Name:              name,
-			Nodes:             nodes[name],
-			Devices:           byClass[name],
-			TaintedDevices:    tainted[name],
-			ExtendedResources: extended[name],
-			UnschedulablePods: unschedulable[name],
-		})
-	}
-	return out, nil
+	return Observation{
+		Nodes:             CountNodes(nodes),
+		Devices:           byClass,
+		TaintedDevices:    TaintedDevices(devices, m),
+		ExtendedResources: ExtendedResources(nodes),
+		UnschedulablePods: UnschedulablePods(name, in.Pods, in.Events),
+	}, nil
 }
 
-// Members returns which pool each node belongs to, and which nodes are
-// schedulable.
+// Members returns the supplied nodes as a pool's members, and which of them
+// are schedulable.
 func Members(nodes []corev1.Node) Membership {
-	m := Membership{Pool: map[string]string{}, Schedulable: map[string]bool{}}
+	m := Membership{Nodes: map[string]bool{}, Schedulable: map[string]bool{}}
 	for _, n := range nodes {
-		p, ok := n.Labels[LabelPool]
-		if !ok {
-			continue
-		}
-		m.Pool[n.Name] = p
+		m.Nodes[n.Name] = true
 		if IsReady(n) && !n.Spec.Unschedulable {
 			m.Schedulable[n.Name] = true
 		}
@@ -234,15 +214,10 @@ func Members(nodes []corev1.Node) Membership {
 	return m
 }
 
-// CountNodes counts each pool's nodes.
-func CountNodes(nodes []corev1.Node) map[string]Nodes {
-	counts := map[string]Nodes{}
+// CountNodes counts a pool's nodes.
+func CountNodes(nodes []corev1.Node) Nodes {
+	c := Nodes{}
 	for _, n := range nodes {
-		p, ok := n.Labels[LabelPool]
-		if !ok {
-			continue
-		}
-		c := counts[p]
 		c.Total++
 		if n.Spec.Unschedulable {
 			c.Cordoned++
@@ -253,30 +228,25 @@ func CountNodes(nodes []corev1.Node) map[string]Nodes {
 				c.Schedulable++
 			}
 		}
-		counts[p] = c
 	}
-	return counts
+	return c
 }
 
-// ExtendedResources sums the extended resources each pool's nodes advertise
-// as allocatable.
-func ExtendedResources(nodes []corev1.Node) map[string]corev1.ResourceList {
-	sums := map[string]corev1.ResourceList{}
+// ExtendedResources sums the extended resources a pool's nodes advertise as
+// allocatable.
+func ExtendedResources(nodes []corev1.Node) corev1.ResourceList {
+	var sums corev1.ResourceList
 	for _, n := range nodes {
-		p, ok := n.Labels[LabelPool]
-		if !ok {
-			continue
-		}
 		for r, q := range n.Status.Allocatable {
 			if !IsExtendedResource(r) {
 				continue
 			}
-			if sums[p] == nil {
-				sums[p] = corev1.ResourceList{}
+			if sums == nil {
+				sums = corev1.ResourceList{}
 			}
-			sum := sums[p][r]
+			sum := sums[r]
 			sum.Add(q)
-			sums[p][r] = sum
+			sums[r] = sum
 		}
 	}
 	return sums
@@ -293,28 +263,26 @@ func Allocated(claims []resourcev1.ResourceClaim) map[dra.DeviceID]bool {
 	return allocated
 }
 
-// TaintedDevices counts each pool's devices that carry a taint that keeps new
+// TaintedDevices counts a pool's devices that carry a taint that keeps new
 // claims from allocating them.
-func TaintedDevices(devices map[dra.DeviceID]dra.Device, m Membership) map[string]int32 {
-	tainted := map[string]int32{}
+func TaintedDevices(devices map[dra.DeviceID]dra.Device, m Membership) int32 {
+	var tainted int32
 	for _, d := range devices {
-		if p, ok := m.Pool[d.NodeName]; ok && d.Tainted() {
-			tainted[p]++
+		if m.Nodes[d.NodeName] && d.Tainted() {
+			tainted++
 		}
 	}
 	return tainted
 }
 
-// DevicesByClass returns each pool's devices by the DeviceClasses they belong
-// to, sorted by class name.
-func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]dra.Device, classes []resourcev1.DeviceClass, allocated map[dra.DeviceID]bool, members Membership) (map[string][]Devices, error) {
-	type poolClass struct{ pool, class string }
-	byClass := map[poolClass]*Devices{}
-	publishes := map[poolClass]map[string]bool{}
+// DevicesByClass returns a pool's devices by the DeviceClasses they belong to,
+// sorted by class name.
+func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]dra.Device, classes []resourcev1.DeviceClass, allocated map[dra.DeviceID]bool, members Membership) ([]Devices, error) {
+	byClass := map[string]*Devices{}
+	publishes := map[string]map[string]bool{}
 
 	for _, device := range devices {
-		p, ok := members.Pool[device.NodeName]
-		if !ok {
+		if !members.Nodes[device.NodeName] {
 			continue
 		}
 		for _, dc := range classes {
@@ -326,15 +294,14 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 				continue
 			}
 
-			k := poolClass{pool: p, class: dc.Name}
-			ds, ok := byClass[k]
+			ds, ok := byClass[dc.Name]
 			if !ok {
 				// The device's attributes belong to the cache, so narrow a copy.
 				ds = &Devices{DeviceClassName: dc.Name, Schedulable: map[string]NodeDevices{}, Attributes: maps.Clone(device.Spec.Attributes)}
-				byClass[k] = ds
-				publishes[k] = map[string]bool{}
+				byClass[dc.Name] = ds
+				publishes[dc.Name] = map[string]bool{}
 			}
-			publishes[k][device.NodeName] = true
+			publishes[dc.Name][device.NodeName] = true
 			maps.DeleteFunc(ds.Attributes, func(name resourcev1.QualifiedName, a resourcev1.DeviceAttribute) bool {
 				b, ok := device.Spec.Attributes[name]
 				return !ok || !equality.Semantic.DeepEqual(a, b)
@@ -356,26 +323,23 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 		}
 	}
 
-	pools := map[string][]Devices{}
-	for k, ds := range byClass {
-		ds.Nodes = int32(len(publishes[k])) //nolint:gosec // A pool can't approach 2^31 nodes.
-		pools[k.pool] = append(pools[k.pool], *ds)
+	out := make([]Devices, 0, len(byClass))
+	for class, ds := range byClass {
+		ds.Nodes = int32(len(publishes[class])) //nolint:gosec // A pool can't approach 2^31 nodes.
+		out = append(out, *ds)
 	}
-	for _, ds := range pools {
-		slices.SortFunc(ds, func(a, b Devices) int { return strings.Compare(a.DeviceClassName, b.DeviceClassName) })
-	}
-	return pools, nil
+	slices.SortFunc(out, func(a, b Devices) int { return strings.Compare(a.DeviceClassName, b.DeviceClassName) })
+	return out, nil
 }
 
-// UnschedulablePods returns the unschedulable pods pinned to each pool by a
-// modelplane.ai/pool node selector, sorted, with the cluster autoscaler's
+// UnschedulablePods returns the unschedulable pods pinned to the named pool by
+// a modelplane.ai/pool node selector, sorted, with the cluster autoscaler's
 // latest verdict on each.
-func UnschedulablePods(pods []corev1.Pod, events []corev1.Event) map[string][]UnschedulablePod {
+func UnschedulablePods(pool string, pods []corev1.Pod, events []corev1.Event) []UnschedulablePod {
 	latest := LatestScaleUpEvents(events)
-	unschedulable := map[string][]UnschedulablePod{}
+	var unschedulable []UnschedulablePod
 	for _, pod := range pods {
-		p, ok := pod.Spec.NodeSelector[LabelPool]
-		if !ok || !IsUnschedulable(pod) {
+		if pod.Spec.NodeSelector[LabelPool] != pool || !IsUnschedulable(pod) {
 			continue
 		}
 		pp := UnschedulablePod{
@@ -389,11 +353,9 @@ func UnschedulablePods(pods []corev1.Pod, events []corev1.Event) map[string][]Un
 			}
 			pp.ScaleUpMessage = e.Message
 		}
-		unschedulable[p] = append(unschedulable[p], pp)
+		unschedulable = append(unschedulable, pp)
 	}
-	for _, pps := range unschedulable {
-		slices.SortFunc(pps, func(a, b UnschedulablePod) int { return compareNamespacedName(a.NamespacedName, b.NamespacedName) })
-	}
+	slices.SortFunc(unschedulable, func(a, b UnschedulablePod) int { return compareNamespacedName(a.NamespacedName, b.NamespacedName) })
 	return unschedulable
 }
 

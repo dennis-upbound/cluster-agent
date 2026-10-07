@@ -30,57 +30,54 @@ import (
 	"github.com/modelplaneai/cluster-agent/internal/pool"
 )
 
-// Status returns the ClusterObservation status that reports the supplied
-// pools. A condition keeps its existing lastTransitionTime unless its status
-// changed.
-func Status(existing v1alpha1.ClusterObservationStatus, pools []pool.Observation) v1alpha1.ClusterObservationStatus {
+// Status returns the PoolObservation status that reports the supplied pool. A
+// condition keeps its existing lastTransitionTime unless its status changed.
+func Status(existing v1alpha1.PoolObservationStatus, generation int64, observed pool.Observation) v1alpha1.PoolObservationStatus {
 	// Condition is a struct of values, so a shallow clone is a deep copy.
-	status := v1alpha1.ClusterObservationStatus{Conditions: slices.Clone(existing.Conditions)}
-	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
-		Type:   v1alpha1.TypeReady,
-		Status: metav1.ConditionTrue,
-		Reason: v1alpha1.ReasonObserved,
-	})
-
-	for _, p := range pools {
-		var conditions []metav1.Condition
-		if i := slices.IndexFunc(existing.Pools, func(e v1alpha1.PoolStatus) bool { return e.Name == p.Name }); i >= 0 {
-			conditions = slices.Clone(existing.Pools[i].Conditions)
-		}
-		meta.SetStatusCondition(&conditions, Healthy(p))
-		meta.SetStatusCondition(&conditions, ScaleUpBlocked(p))
-
-		ps := v1alpha1.PoolStatus{
-			Name: p.Name,
-			Nodes: v1alpha1.NodeCounts{
-				Total:       p.Nodes.Total,
-				Ready:       p.Nodes.Ready,
-				Schedulable: p.Nodes.Schedulable,
-			},
-			UnschedulablePods: int32(len(p.UnschedulablePods)), //nolint:gosec // A pool can't approach 2^31 unschedulable pods.
-			ExtendedResources: p.ExtendedResources,
-			Conditions:        conditions,
-		}
-		for _, d := range p.Devices {
-			ps.Devices = append(ps.Devices, DeviceClassStatus(d))
-		}
-		status.Pools = append(status.Pools, ps)
+	status := v1alpha1.PoolObservationStatus{
+		ObservedGeneration: generation,
+		Conditions:         slices.Clone(existing.Conditions),
+		Nodes: v1alpha1.NodeCounts{
+			Total:       observed.Nodes.Total,
+			Ready:       observed.Nodes.Ready,
+			Schedulable: observed.Nodes.Schedulable,
+		},
+		UnschedulablePods: int32(len(observed.UnschedulablePods)), //nolint:gosec // A pool can't approach 2^31 unschedulable pods.
+		ExtendedResources: observed.ExtendedResources,
 	}
+	for _, d := range observed.Devices {
+		status.Devices = append(status.Devices, DeviceClassStatus(d))
+	}
+
+	healthy := Healthy(observed)
+	healthy.ObservedGeneration = generation
+	meta.SetStatusCondition(&status.Conditions, healthy)
+
+	blocked := ScaleUpBlocked(observed)
+	blocked.ObservedGeneration = generation
+	meta.SetStatusCondition(&status.Conditions, blocked)
 
 	return status
 }
 
-// FailedStatus returns the ClusterObservation status that reports the supplied
-// error. Its Ready condition becomes False, so whoever reads the existing
-// pools it keeps knows they're stale.
-func FailedStatus(existing v1alpha1.ClusterObservationStatus, err error) v1alpha1.ClusterObservationStatus {
-	status := *existing.DeepCopy()
-	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
-		Type:    v1alpha1.TypeReady,
-		Status:  metav1.ConditionFalse,
-		Reason:  v1alpha1.ReasonObservationFailed,
-		Message: err.Error(),
-	})
+// FailedStatus returns the PoolObservation status that reports the pool
+// couldn't be observed. Its conditions become Unknown, and it reports no
+// nodes or devices.
+func FailedStatus(existing v1alpha1.PoolObservationStatus, generation int64, err error) v1alpha1.PoolObservationStatus {
+	// Condition is a struct of values, so a shallow clone is a deep copy.
+	status := v1alpha1.PoolObservationStatus{
+		ObservedGeneration: generation,
+		Conditions:         slices.Clone(existing.Conditions),
+	}
+	for _, t := range []string{v1alpha1.TypeHealthy, v1alpha1.TypeScaleUpBlocked} {
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:               t,
+			Status:             metav1.ConditionUnknown,
+			Reason:             v1alpha1.ReasonObservationFailed,
+			Message:            err.Error(),
+			ObservedGeneration: generation,
+		})
+	}
 	return status
 }
 

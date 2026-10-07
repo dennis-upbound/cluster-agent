@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // The cluster-agent command observes a Modelplane InferenceCluster and reports
-// what it sees in the status of ClusterObservations and ReplicaObservations.
+// what it sees in the status of PoolObservations and ReplicaObservations.
 package main
 
 import (
@@ -85,7 +85,7 @@ func main() {
 	kctx.FatalIfErrorf(mgr.AddHealthzCheck("ping", healthz.Ping), "cannot add health check")
 	kctx.FatalIfErrorf(mgr.AddReadyzCheck("ping", healthz.Ping), "cannot add ready check")
 
-	kctx.FatalIfErrorf(poolobservation.Setup(mgr, log, flags.ObservationDelay), "cannot set up ClusterObservation controller")
+	kctx.FatalIfErrorf(poolobservation.Setup(mgr, log, flags.ObservationDelay), "cannot set up PoolObservation controller")
 	kctx.FatalIfErrorf(replicaobservation.Setup(mgr, log), "cannot set up ReplicaObservation controller")
 
 	kctx.FatalIfErrorf(mgr.Start(ctrl.SetupSignalHandler()), "cannot run manager")

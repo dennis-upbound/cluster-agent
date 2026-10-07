@@ -63,143 +63,122 @@ var l4Attributes = map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
 	"type":                  {StringValue: new("gpu")},
 }
 
-func TestObservePools(t *testing.T) {
-	cases := map[string]struct {
-		reason   string
+func TestObservePool(t *testing.T) {
+	type args struct {
 		snapshot string
-		want     []Observation
+		pool     string
+	}
+
+	cases := map[string]struct {
+		reason string
+		args   args
+		want   Observation
 	}{
 		"Full": {
-			reason:   "Every GPU on the node is allocated, and a pool with no nodes appears because an unschedulable pod is pinned to it.",
-			snapshot: "full",
-			want: []Observation{
-				{
-					Name: "gpu-l4x4",
-					UnschedulablePods: []UnschedulablePod{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
-							ScaleUp:        ScaleUpNotTriggered,
-							ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
-						},
+			reason: "Every GPU on the node is allocated.",
+			args:   args{snapshot: "full", pool: "gpu-l4x4-a"},
+			want: Observation{
+				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
+				Devices: []Devices{
+					{
+						DeviceClassName: "gpu.nvidia.com",
+						Nodes:           1,
+						Schedulable:     map[string]NodeDevices{"ip-10-0-54-161.ec2.internal": {Allocatable: 4, Allocated: 4}},
+						Attributes:      l4Attributes,
 					},
 				},
-				{
-					Name:  "gpu-l4x4-a",
-					Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
-					Devices: []Devices{
-						{
-							DeviceClassName: "gpu.nvidia.com",
-							Nodes:           1,
-							Schedulable:     map[string]NodeDevices{"ip-10-0-54-161.ec2.internal": {Allocatable: 4, Allocated: 4}},
-							Attributes:      l4Attributes,
-						},
+				UnschedulablePods: []UnschedulablePod{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
+						ScaleUp:        ScaleUpNotTriggered,
+						ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
 					},
-					UnschedulablePods: []UnschedulablePod{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
-							ScaleUp:        ScaleUpNotTriggered,
-							ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
-						},
-					},
-				},
-				{
-					Name:  "system",
-					Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
 				},
 			},
 		},
 		"Partial": {
-			reason:   "A node with one GPU free should report it.",
-			snapshot: "partial",
-			want: []Observation{
-				{
-					Name: "gpu-l4x4",
-					UnschedulablePods: []UnschedulablePod{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
-							ScaleUp:        ScaleUpNotTriggered,
-							ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
-						},
+			reason: "A node with one GPU free should report it.",
+			args:   args{snapshot: "partial", pool: "gpu-l4x4-a"},
+			want: Observation{
+				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
+				Devices: []Devices{
+					{
+						DeviceClassName: "gpu.nvidia.com",
+						Nodes:           1,
+						Schedulable:     map[string]NodeDevices{"ip-10-0-54-161.ec2.internal": {Allocatable: 4, Allocated: 3}},
+						Attributes:      l4Attributes,
 					},
 				},
-				{
-					Name:  "gpu-l4x4-a",
-					Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
-					Devices: []Devices{
-						{
-							DeviceClassName: "gpu.nvidia.com",
-							Nodes:           1,
-							Schedulable:     map[string]NodeDevices{"ip-10-0-54-161.ec2.internal": {Allocatable: 4, Allocated: 3}},
-							Attributes:      l4Attributes,
-						},
+				UnschedulablePods: []UnschedulablePod{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
+						ScaleUp:        ScaleUpNotTriggered,
+						ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
 					},
-					UnschedulablePods: []UnschedulablePod{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
-							ScaleUp:        ScaleUpNotTriggered,
-							ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
-						},
-					},
-				},
-				{
-					Name:  "system",
-					Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
 				},
 			},
 		},
 		"Cordoned": {
-			reason:   "A cordoned node's devices should count toward the nodes that publish them, but not toward what's allocatable. The autoscaler's latest event about a pod should win.",
-			snapshot: "cordoned",
-			want: []Observation{
-				{
-					Name: "gpu-l4x4",
-					UnschedulablePods: []UnschedulablePod{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
-							ScaleUp:        ScaleUpNotTriggered,
-							ScaleUpMessage: "pod didn't trigger scale-up: 1 max node group size reached, 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up",
-						},
+			reason: "A cordoned node's devices should count toward the nodes that publish them, but not toward what's allocatable.",
+			args:   args{snapshot: "cordoned", pool: "gpu-l4x4-a"},
+			want: Observation{
+				Nodes: Nodes{Total: 1, Ready: 1, Cordoned: 1, Schedulable: 0},
+				Devices: []Devices{
+					{
+						DeviceClassName: "gpu.nvidia.com",
+						Nodes:           1,
+						Attributes:      l4Attributes,
 					},
 				},
-				{
-					Name:  "gpu-l4x4-a",
-					Nodes: Nodes{Total: 1, Ready: 1, Cordoned: 1, Schedulable: 0},
-					Devices: []Devices{
-						{
-							DeviceClassName: "gpu.nvidia.com",
-							Nodes:           1,
-							Attributes:      l4Attributes,
-						},
+				UnschedulablePods: []UnschedulablePod{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
+						ScaleUp:        ScaleUpNotTriggered,
+						ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
 					},
-					UnschedulablePods: []UnschedulablePod{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
-							ScaleUp:        ScaleUpNotTriggered,
-							ScaleUpMessage: "pod didn't trigger scale-up: 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up, 1 max node group size reached",
-						},
-					},
-				},
-				{
-					Name:  "system",
-					Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
 				},
 			},
+		},
+		"NoNodes": {
+			reason: "A pool with no nodes should report only the pods pinned to it. The autoscaler's latest event about a pod should win.",
+			args:   args{snapshot: "cordoned", pool: "gpu-l4x4"},
+			want: Observation{
+				UnschedulablePods: []UnschedulablePod{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "stocked-out-db588bffc-bzgt8"},
+						ScaleUp:        ScaleUpNotTriggered,
+						ScaleUpMessage: "pod didn't trigger scale-up: 1 max node group size reached, 1 node(s) didn't match Pod's node affinity/selector, 1 not ready for scale-up",
+					},
+				},
+			},
+		},
+		"NoDevices": {
+			reason: "A pool whose nodes publish no devices should report only its nodes.",
+			args:   args{snapshot: "full", pool: "system"},
+			want: Observation{
+				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
+			},
+		},
+		"UnknownPool": {
+			reason: "A pool no node or pod names should report nothing.",
+			args:   args{snapshot: "full", pool: "nonexistent"},
+			want:   Observation{},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			in := inputs(t, filepath.Join("testdata", tc.snapshot))
-			got, err := NewObserver().ObservePools(t.Context(), in)
+			in := inputs(t, filepath.Join("testdata", tc.args.snapshot))
+			got, err := NewObserver().ObservePool(t.Context(), tc.args.pool, in)
 			if diff := cmp.Diff(nil, err, cmpopts.EquateErrors()); diff != "" {
-				t.Errorf("\n%s\nObservePools(...): -want error, +got error:\n%s", tc.reason, diff)
+				t.Errorf("\n%s\nObservePool(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty(), equateQuantities); diff != "" {
-				t.Errorf("\n%s\nObservePools(...): -want, +got:\n%s", tc.reason, diff)
+				t.Errorf("\n%s\nObservePool(...): -want, +got:\n%s", tc.reason, diff)
 			}
 			// The agent reads inputs straight from its cache.
-			if diff := cmp.Diff(inputs(t, filepath.Join("testdata", tc.snapshot)), in, equateQuantities); diff != "" {
-				t.Errorf("\n%s\nObservePools(...): modified its inputs: -before, +after:\n%s", tc.reason, diff)
+			if diff := cmp.Diff(inputs(t, filepath.Join("testdata", tc.args.snapshot)), in, equateQuantities); diff != "" {
+				t.Errorf("\n%s\nObservePool(...): modified its inputs: -before, +after:\n%s", tc.reason, diff)
 			}
 		})
 	}
@@ -394,20 +373,17 @@ func TestCountNodes(t *testing.T) {
 	cases := map[string]struct {
 		reason string
 		nodes  []corev1.Node
-		want   map[string]Nodes
+		want   Nodes
 	}{
 		"States": {
-			reason: "Each node should count toward its pool by whether it's ready and cordoned. A node outside a pool shouldn't count.",
+			reason: "Each node should count by whether it's ready and cordoned.",
 			nodes: []corev1.Node{
 				{ObjectMeta: metav1.ObjectMeta{Name: "ready", Labels: map[string]string{LabelPool: "gpu"}}, Status: ready},
 				{ObjectMeta: metav1.ObjectMeta{Name: "cordoned", Labels: map[string]string{LabelPool: "gpu"}}, Spec: corev1.NodeSpec{Unschedulable: true}, Status: ready},
 				{ObjectMeta: metav1.ObjectMeta{Name: "draining", Labels: map[string]string{LabelPool: "gpu"}}, Spec: corev1.NodeSpec{Unschedulable: true}, Status: notReady},
 				{ObjectMeta: metav1.ObjectMeta{Name: "no-condition", Labels: map[string]string{LabelPool: "gpu"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "unpooled"}, Status: ready},
 			},
-			want: map[string]Nodes{
-				"gpu": {Total: 4, Ready: 2, Cordoned: 2, Schedulable: 1},
-			},
+			want: Nodes{Total: 4, Ready: 2, Cordoned: 2, Schedulable: 1},
 		},
 	}
 
@@ -425,7 +401,7 @@ func TestExtendedResources(t *testing.T) {
 	cases := map[string]struct {
 		reason string
 		nodes  []corev1.Node
-		want   map[string]corev1.ResourceList
+		want   corev1.ResourceList
 	}{
 		"DevicePlugin": {
 			reason: "Extended resources should be summed across a pool's nodes, whatever their state, and native resources ignored.",
@@ -442,14 +418,18 @@ func TestExtendedResources(t *testing.T) {
 					Spec:       corev1.NodeSpec{Unschedulable: true},
 					Status:     corev1.NodeStatus{Allocatable: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")}},
 				},
+			},
+			want: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
+		},
+		"NoneAdvertised": {
+			reason: "A pool whose nodes advertise only native resources has no extended resources.",
+			nodes: []corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "c", Labels: map[string]string{LabelPool: "system"}},
 					Status:     corev1.NodeStatus{Allocatable: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4")}},
 				},
 			},
-			want: map[string]corev1.ResourceList{
-				"gpu": {"nvidia.com/gpu": resource.MustParse("8")},
-			},
+			want: nil,
 		},
 	}
 
@@ -480,7 +460,7 @@ func TestDevicesByClass(t *testing.T) {
 	cases := map[string]struct {
 		reason string
 		args   args
-		want   map[string][]Devices
+		want   []Devices
 	}{
 		"Tainted": {
 			reason: "A tainted device isn't allocatable, but a schedulable node whose devices are all tainted still counts as a node with none free.",
@@ -492,30 +472,28 @@ func TestDevicesByClass(t *testing.T) {
 				},
 				allocated: map[dra.DeviceID]bool{{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-0"}: true},
 				m: Membership{
-					Pool:        map[string]string{"a": "gpu", "b": "gpu"},
+					Nodes:       map[string]bool{"a": true, "b": true},
 					Schedulable: map[string]bool{"a": true, "b": true},
 				},
 			},
-			want: map[string][]Devices{
-				"gpu": {
-					{
-						DeviceClassName: "gpu.nvidia.com",
-						Nodes:           2,
-						Schedulable: map[string]NodeDevices{
-							"a": {Allocatable: 1, Allocated: 1},
-							"b": {},
-						},
+			want: []Devices{
+				{
+					DeviceClassName: "gpu.nvidia.com",
+					Nodes:           2,
+					Schedulable: map[string]NodeDevices{
+						"a": {Allocatable: 1, Allocated: 1},
+						"b": {},
 					},
 				},
 			},
 		},
-		"Unpooled": {
-			reason: "Devices on nodes outside a pool shouldn't count.",
+		"OtherPools": {
+			reason: "Devices on nodes outside the pool shouldn't count.",
 			args: args{
 				devices: []dra.Device{{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-0"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-0"}}},
-				m:       Membership{Pool: map[string]string{}, Schedulable: map[string]bool{}},
+				m:       Membership{Nodes: map[string]bool{"b": true}, Schedulable: map[string]bool{"b": true}},
 			},
-			want: map[string][]Devices{},
+			want: nil,
 		},
 	}
 
@@ -545,10 +523,10 @@ func TestTaintedDevices(t *testing.T) {
 	cases := map[string]struct {
 		reason string
 		args   args
-		want   map[string]int32
+		want   int32
 	}{
 		"Effects": {
-			reason: "A pool should count its devices with a taint that keeps new claims from allocating them. A taint with no effect, and a device outside a pool, shouldn't count.",
+			reason: "A pool should count its devices with a taint that keeps new claims from allocating them. A taint with no effect, and a device outside the pool, shouldn't count.",
 			args: args{
 				devices: []dra.Device{
 					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-0"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-0", Taints: []resourcev1.DeviceTaint{{Key: "gpu.nvidia.com/xid", Effect: resourcev1.DeviceTaintEffectNoSchedule}}}},
@@ -557,9 +535,9 @@ func TestTaintedDevices(t *testing.T) {
 					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "a", Device: "gpu-3"}, NodeName: "a", Spec: resourcev1.Device{Name: "gpu-3"}},
 					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "b", Device: "gpu-0"}, NodeName: "b", Spec: resourcev1.Device{Name: "gpu-0", Taints: []resourcev1.DeviceTaint{{Key: "gpu.nvidia.com/xid", Effect: resourcev1.DeviceTaintEffectNoSchedule}}}},
 				},
-				m: Membership{Pool: map[string]string{"a": "gpu"}},
+				m: Membership{Nodes: map[string]bool{"a": true}},
 			},
-			want: map[string]int32{"gpu": 2},
+			want: 2,
 		},
 	}
 

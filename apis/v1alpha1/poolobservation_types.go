@@ -23,62 +23,55 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ClusterObservationName is the name of the one ClusterObservation the agent
-// reports on.
-const ClusterObservationName = "cluster"
-
-// A ClusterObservation reports the state of the cluster's GPU pools. The agent
-// writes its status. A cluster has at most one ClusterObservation, named
-// cluster.
+// A PoolObservation reports the state of one pool: the nodes that carry a
+// modelplane.ai/pool label with the pool's name. The agent writes its status.
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories=modelplane
-// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="POOL",type="string",JSONPath=".spec.poolName"
+// +kubebuilder:printcolumn:name="HEALTHY",type="string",JSONPath=".status.conditions[?(@.type=='Healthy')].status"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="a ClusterObservation must be named cluster"
-type ClusterObservation struct {
+type PoolObservation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// +optional
-	Spec ClusterObservationSpec `json:"spec,omitempty"`
+	Spec PoolObservationSpec `json:"spec"`
 
 	// +optional
-	Status ClusterObservationStatus `json:"status,omitempty"`
+	Status PoolObservationStatus `json:"status,omitempty"`
 }
 
-// ClusterObservationSpec is empty. The agent decides what to observe.
-type ClusterObservationSpec struct{}
+// PoolObservationSpec specifies which pool to observe.
+type PoolObservationSpec struct {
+	// PoolName is the pool's name: the value of its nodes' modelplane.ai/pool
+	// label, and of the node selector that pins a pod to the pool.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`
+	PoolName string `json:"poolName"`
+}
 
-// ClusterObservationStatus is what the agent observed about the cluster.
-type ClusterObservationStatus struct {
-	// Conditions of the observation. Ready is True when the agent's most
-	// recent observation succeeded. When it's False, the pools are stale.
+// PoolObservationStatus is what the agent observed about the pool.
+type PoolObservationStatus struct {
+	// ObservedGeneration is the generation of the spec the status reports on.
+	//
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Conditions of the pool. Healthy is False when any of the pool's nodes
+	// is not ready or cordoned, or any of its devices is tainted.
+	// ScaleUpBlocked is True when the cluster autoscaler reports it can't add
+	// nodes for an unschedulable pod. Both are Unknown, and the status reports
+	// no nodes or devices, when the agent can't observe the pool. Each
+	// condition's lastTransitionTime is when its status last changed.
 	//
 	// +optional
 	// +listType=map
 	// +listMapKey=type
 	// +kubebuilder:validation:MaxItems=8
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// Pools are the cluster's GPU pools. A pool is every node that carries a
-	// modelplane.ai/pool label with the pool's name. A pool with no nodes
-	// appears when unschedulable pods are pinned to it.
-	//
-	// +optional
-	// +listType=map
-	// +listMapKey=name
-	// +kubebuilder:validation:MaxItems=64
-	Pools []PoolStatus `json:"pools,omitempty"`
-}
-
-// PoolStatus is what the agent observed about one GPU pool.
-type PoolStatus struct {
-	// Name of the pool: the value of its nodes' modelplane.ai/pool label.
-	//
-	// +kubebuilder:validation:MaxLength=63
-	Name string `json:"name"`
 
 	// Nodes counts the pool's nodes.
 	Nodes NodeCounts `json:"nodes"`
@@ -109,18 +102,6 @@ type PoolStatus struct {
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
 	ExtendedResources map[corev1.ResourceName]resource.Quantity `json:"extendedResources,omitempty"`
-
-	// Conditions of the pool. Healthy is False when any of the pool's nodes
-	// is not ready or cordoned, or any of its devices is tainted.
-	// ScaleUpBlocked is True when the cluster autoscaler reports it can't add
-	// nodes for an unschedulable pod. Each condition's lastTransitionTime is
-	// when its status last changed.
-	//
-	// +optional
-	// +listType=map
-	// +listMapKey=type
-	// +kubebuilder:validation:MaxItems=8
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // NodeCounts counts a pool's nodes.
@@ -195,12 +176,12 @@ type FreeDevicesBucket struct {
 	Nodes int32 `json:"nodes"`
 }
 
-// ClusterObservationList is a list of ClusterObservations.
+// PoolObservationList is a list of PoolObservations.
 //
 // +kubebuilder:object:root=true
-type ClusterObservationList struct {
+type PoolObservationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []ClusterObservation `json:"items"`
+	Items []PoolObservation `json:"items"`
 }

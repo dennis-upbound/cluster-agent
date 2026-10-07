@@ -18,11 +18,10 @@ package v1alpha1
 
 // Condition types.
 const (
-	// TypeReady is a ClusterObservation's summary condition, and a
-	// ReplicaObservation's.
+	// TypeReady reports whether a replica's pods are ready.
 	TypeReady = "Ready"
 
-	// TypeHealthy is a pool's health.
+	// TypeHealthy reports whether a pool's nodes and devices are healthy.
 	TypeHealthy = "Healthy"
 
 	// TypeScaleUpBlocked reports whether the cluster autoscaler can add
@@ -33,12 +32,9 @@ const (
 	TypeScheduled = "Scheduled"
 )
 
-// Reasons for a ClusterObservation's Ready condition. A ReplicaObservation's
-// conditions use ReasonObservationFailed too.
-const (
-	ReasonObserved          = "Observed"
-	ReasonObservationFailed = "ObservationFailed"
-)
+// ReasonObservationFailed is the reason for every condition of an observation
+// the agent couldn't make.
+const ReasonObservationFailed = "ObservationFailed"
 
 // Reasons for a pool's Healthy condition.
 const (

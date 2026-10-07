@@ -39,14 +39,14 @@ var SchemeGroupVersion = schema.GroupVersion{Group: Group, Version: Version}
 
 // Kinds of the observation API.
 var (
-	ClusterObservationGroupVersionKind = SchemeGroupVersion.WithKind("ClusterObservation")
+	PoolObservationGroupVersionKind    = SchemeGroupVersion.WithKind("PoolObservation")
 	ReplicaObservationGroupVersionKind = SchemeGroupVersion.WithKind("ReplicaObservation")
 )
 
 var schemeBuilder = runtime.NewSchemeBuilder(func(s *runtime.Scheme) error {
 	s.AddKnownTypes(SchemeGroupVersion,
-		&ClusterObservation{},
-		&ClusterObservationList{},
+		&PoolObservation{},
+		&PoolObservationList{},
 		&ReplicaObservation{},
 		&ReplicaObservationList{},
 	)

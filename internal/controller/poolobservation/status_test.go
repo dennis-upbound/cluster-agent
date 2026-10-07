@@ -44,187 +44,121 @@ func TestStatus(t *testing.T) {
 	now := metav1.Now()
 
 	type args struct {
-		existing v1alpha1.ClusterObservationStatus
-		pools    []pool.Observation
+		existing   v1alpha1.PoolObservationStatus
+		generation int64
+		observed   pool.Observation
 	}
 
 	cases := map[string]struct {
 		reason string
 		args   args
-		want   v1alpha1.ClusterObservationStatus
+		want   v1alpha1.PoolObservationStatus
 	}{
-		"NoPools": {
-			reason: "A cluster with no pools should report that it was observed, and no pools.",
-			args:   args{},
-			want: v1alpha1.ClusterObservationStatus{
-				Conditions: []metav1.Condition{
-					{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: now},
-				},
-			},
-		},
-		"NewPool": {
-			reason: "A pool that's new to the status should report everything observed about it, with conditions that transitioned now.",
+		"FirstObservation": {
+			reason: "A pool observed for the first time should report everything observed about it, with conditions that transitioned now.",
 			args: args{
-				pools: []pool.Observation{
-					{
-						Name:  "gpu",
-						Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2},
-						Devices: []pool.Devices{
-							{
-								DeviceClassName: "gpu.nvidia.com",
-								Nodes:           2,
-								Schedulable: map[string]pool.NodeDevices{
-									"node-a": {Allocatable: 4, Allocated: 1},
-									"node-b": {Allocatable: 4},
-								},
-								Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-									"productName": {StringValue: new("NVIDIA L4")},
-								},
+				generation: 2,
+				observed: pool.Observation{
+					Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2},
+					Devices: []pool.Devices{
+						{
+							DeviceClassName: "gpu.nvidia.com",
+							Nodes:           2,
+							Schedulable: map[string]pool.NodeDevices{
+								"node-a": {Allocatable: 4, Allocated: 1},
+								"node-b": {Allocatable: 4},
+							},
+							Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+								"productName": {StringValue: new("NVIDIA L4")},
 							},
 						},
-						ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
-						UnschedulablePods: []pool.UnschedulablePod{
-							{
-								NamespacedName: types.NamespacedName{Namespace: "ml", Name: "llama-1"},
-								ScaleUp:        pool.ScaleUpTriggered,
-								ScaleUpMessage: "pod triggered scale-up: [{gpu 2->3 (max: 4)}]",
-							},
+					},
+					ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
+					UnschedulablePods: []pool.UnschedulablePod{
+						{
+							NamespacedName: types.NamespacedName{Namespace: "ml", Name: "llama-1"},
+							ScaleUp:        pool.ScaleUpTriggered,
+							ScaleUpMessage: "pod triggered scale-up: [{gpu 2->3 (max: 4)}]",
 						},
 					},
 				},
 			},
-			want: v1alpha1.ClusterObservationStatus{
+			want: v1alpha1.PoolObservationStatus{
+				ObservedGeneration: 2,
 				Conditions: []metav1.Condition{
-					{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: now},
+					{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 2, LastTransitionTime: now},
+					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonScaleUpTriggered, Message: "pod ml/llama-1: pod triggered scale-up: [{gpu 2->3 (max: 4)}]", ObservedGeneration: 2, LastTransitionTime: now},
 				},
-				Pools: []v1alpha1.PoolStatus{
+				Nodes:             v1alpha1.NodeCounts{Total: 2, Ready: 2, Schedulable: 2},
+				UnschedulablePods: 1,
+				Devices: []v1alpha1.DeviceClassStatus{
 					{
-						Name:  "gpu",
-						Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 2, Schedulable: 2},
-						Devices: []v1alpha1.DeviceClassStatus{
-							{
-								DeviceClassName: "gpu.nvidia.com",
-								Nodes:           2,
-								Allocatable:     8,
-								Allocated:       1,
-								NodesByFreeDevices: []v1alpha1.FreeDevicesBucket{
-									{FreeDevices: 3, Nodes: 1},
-									{FreeDevices: 4, Nodes: 1},
-								},
-								Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-									"productName": {StringValue: new("NVIDIA L4")},
-								},
-							},
+						DeviceClassName: "gpu.nvidia.com",
+						Nodes:           2,
+						Allocatable:     8,
+						Allocated:       1,
+						NodesByFreeDevices: []v1alpha1.FreeDevicesBucket{
+							{FreeDevices: 3, Nodes: 1},
+							{FreeDevices: 4, Nodes: 1},
 						},
-						ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
-						UnschedulablePods: 1,
-						Conditions: []metav1.Condition{
-							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonScaleUpTriggered, Message: "pod ml/llama-1: pod triggered scale-up: [{gpu 2->3 (max: 4)}]", LastTransitionTime: now},
+						Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+							"productName": {StringValue: new("NVIDIA L4")},
 						},
 					},
 				},
+				ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
 			},
 		},
 		"KeepsTransitionTime": {
 			reason: "A condition whose status hasn't changed should keep its lastTransitionTime, even when its message changes.",
 			args: args{
-				existing: v1alpha1.ClusterObservationStatus{
+				existing: v1alpha1.PoolObservationStatus{
+					ObservedGeneration: 1,
 					Conditions: []metav1.Condition{
-						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
+						{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 2 nodes not ready", ObservedGeneration: 1, LastTransitionTime: then},
+						{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 					},
-					Pools: []v1alpha1.PoolStatus{
-						{
-							Name:  "gpu",
-							Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 1, Schedulable: 1},
-							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 2 nodes not ready", LastTransitionTime: then},
-								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
-							},
-						},
-					},
+					Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 1, Schedulable: 1},
 				},
-				pools: []pool.Observation{
-					{Name: "gpu", Nodes: pool.Nodes{Total: 3, Ready: 1, Schedulable: 1}},
-				},
+				generation: 1,
+				observed:   pool.Observation{Nodes: pool.Nodes{Total: 3, Ready: 1, Schedulable: 1}},
 			},
-			want: v1alpha1.ClusterObservationStatus{
+			want: v1alpha1.PoolObservationStatus{
+				ObservedGeneration: 1,
 				Conditions: []metav1.Condition{
-					{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
+					{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "2 of 3 nodes not ready", ObservedGeneration: 1, LastTransitionTime: then},
+					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 				},
-				Pools: []v1alpha1.PoolStatus{
-					{
-						Name:  "gpu",
-						Nodes: v1alpha1.NodeCounts{Total: 3, Ready: 1, Schedulable: 1},
-						Conditions: []metav1.Condition{
-							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "2 of 3 nodes not ready", LastTransitionTime: then},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
-						},
-					},
-				},
+				Nodes: v1alpha1.NodeCounts{Total: 3, Ready: 1, Schedulable: 1},
 			},
 		},
-		"StatusChanged": {
-			reason: "A condition whose status changed should transition now, and a failed observation should recover.",
+		"Recovers": {
+			reason: "A condition whose status changed should transition now, including when a failed observation recovers.",
 			args: args{
-				existing: v1alpha1.ClusterObservationStatus{
+				existing: v1alpha1.PoolObservationStatus{
+					ObservedGeneration: 1,
 					Conditions: []metav1.Condition{
-						{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", LastTransitionTime: then},
-					},
-					Pools: []v1alpha1.PoolStatus{
-						{
-							Name:  "gpu",
-							Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 1, Schedulable: 1},
-							Conditions: []metav1.Condition{
-								{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNodesNotReady, Message: "1 of 2 nodes not ready", LastTransitionTime: then},
-								{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
-							},
-						},
+						{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", ObservedGeneration: 1, LastTransitionTime: then},
+						{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 					},
 				},
-				pools: []pool.Observation{
-					{Name: "gpu", Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2}},
-				},
+				generation: 1,
+				observed:   pool.Observation{Nodes: pool.Nodes{Total: 2, Ready: 2, Schedulable: 2}},
 			},
-			want: v1alpha1.ClusterObservationStatus{
+			want: v1alpha1.PoolObservationStatus{
+				ObservedGeneration: 1,
 				Conditions: []metav1.Condition{
-					{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: now},
+					{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 1, LastTransitionTime: now},
+					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 				},
-				Pools: []v1alpha1.PoolStatus{
-					{
-						Name:  "gpu",
-						Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 2, Schedulable: 2},
-						Conditions: []metav1.Condition{
-							{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, LastTransitionTime: now},
-							{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, LastTransitionTime: then},
-						},
-					},
-				},
-			},
-		},
-		"DropsVanishedPool": {
-			reason: "A pool that's no longer observed should drop out of the status.",
-			args: args{
-				existing: v1alpha1.ClusterObservationStatus{
-					Conditions: []metav1.Condition{
-						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
-					},
-					Pools: []v1alpha1.PoolStatus{
-						{Name: "gone", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
-					},
-				},
-			},
-			want: v1alpha1.ClusterObservationStatus{
-				Conditions: []metav1.Condition{
-					{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
-				},
+				Nodes: v1alpha1.NodeCounts{Total: 2, Ready: 2, Schedulable: 2},
 			},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := Status(tc.args.existing, tc.args.pools)
+			got := Status(tc.args.existing, tc.args.generation, tc.args.observed)
 			if diff := cmp.Diff(tc.want, got, equateNow, equateQuantities); diff != "" {
 				t.Errorf("\n%s\nStatus(...): -want, +got:\n%s", tc.reason, diff)
 			}
@@ -237,34 +171,36 @@ func TestFailedStatus(t *testing.T) {
 	now := metav1.Now()
 
 	type args struct {
-		existing v1alpha1.ClusterObservationStatus
-		err      error
+		existing   v1alpha1.PoolObservationStatus
+		generation int64
+		err        error
 	}
 
 	cases := map[string]struct {
 		reason string
 		args   args
-		want   v1alpha1.ClusterObservationStatus
+		want   v1alpha1.PoolObservationStatus
 	}{
-		"KeepsStalePools": {
-			reason: "A failed observation should make Ready False, and keep the pools the last successful one reported.",
+		"Failed": {
+			reason: "A failed observation should make both conditions unknown, and clear the observed nodes and devices.",
 			args: args{
-				existing: v1alpha1.ClusterObservationStatus{
+				existing: v1alpha1.PoolObservationStatus{
+					ObservedGeneration: 1,
 					Conditions: []metav1.Condition{
-						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonObserved, LastTransitionTime: then},
+						{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 1, LastTransitionTime: then},
+						{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 					},
-					Pools: []v1alpha1.PoolStatus{
-						{Name: "gpu", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
-					},
+					Nodes:   v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
+					Devices: []v1alpha1.DeviceClassStatus{{DeviceClassName: "gpu.nvidia.com", Nodes: 1, Allocatable: 4}},
 				},
-				err: errors.New("boom"),
+				generation: 2,
+				err:        errors.New("boom"),
 			},
-			want: v1alpha1.ClusterObservationStatus{
+			want: v1alpha1.PoolObservationStatus{
+				ObservedGeneration: 2,
 				Conditions: []metav1.Condition{
-					{Type: v1alpha1.TypeReady, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", LastTransitionTime: now},
-				},
-				Pools: []v1alpha1.PoolStatus{
-					{Name: "gpu", Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1}},
+					{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", ObservedGeneration: 2, LastTransitionTime: now},
+					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", ObservedGeneration: 2, LastTransitionTime: now},
 				},
 			},
 		},
@@ -272,7 +208,7 @@ func TestFailedStatus(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := FailedStatus(tc.args.existing, tc.args.err)
+			got := FailedStatus(tc.args.existing, tc.args.generation, tc.args.err)
 			if diff := cmp.Diff(tc.want, got, equateNow); diff != "" {
 				t.Errorf("\n%s\nFailedStatus(...): -want, +got:\n%s", tc.reason, diff)
 			}
