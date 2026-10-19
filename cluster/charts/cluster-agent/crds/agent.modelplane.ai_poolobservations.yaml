@@ -235,35 +235,6 @@ spec:
                       format: int32
                       minimum: 0
                       type: integer
-                    nodesByFreeDevices:
-                      description: |-
-                        NodesByFreeDevices is a histogram of the schedulable nodes that
-                        publish devices of the class, by how many of those devices are
-                        allocatable and not allocated.
-                      items:
-                        description: A FreeDevicesBucket counts the nodes with a number
-                          of free devices.
-                        properties:
-                          freeDevices:
-                            description: FreeDevices is the number of free devices.
-                            format: int32
-                            minimum: 0
-                            type: integer
-                          nodes:
-                            description: Nodes counts the nodes with that many free
-                              devices.
-                            format: int32
-                            minimum: 1
-                            type: integer
-                        required:
-                        - freeDevices
-                        - nodes
-                        type: object
-                      maxItems: 129
-                      type: array
-                      x-kubernetes-list-map-keys:
-                      - freeDevices
-                      x-kubernetes-list-type: map
                   required:
                   - allocatable
                   - allocated
@@ -313,6 +284,36 @@ spec:
                 - schedulable
                 - total
                 type: object
+              nodesByFreeDevices:
+                description: |-
+                  NodesByFreeDevices is a histogram of the pool's schedulable nodes, by
+                  how many devices of each DeviceClass are allocatable and not allocated
+                  on them. Nodes with the same number of free devices of every class
+                  share a bucket.
+                items:
+                  description: A FreeDevicesBucket counts the nodes with the same
+                    free devices.
+                  properties:
+                    freeDevices:
+                      additionalProperties:
+                        format: int32
+                        type: integer
+                      description: |-
+                        FreeDevices counts each of the nodes' free devices, keyed by
+                        DeviceClass. A class the nodes publish no devices of is absent.
+                      maxProperties: 32
+                      type: object
+                    nodes:
+                      description: Nodes counts the nodes with these free devices.
+                      format: int32
+                      minimum: 1
+                      type: integer
+                  required:
+                  - nodes
+                  type: object
+                maxItems: 256
+                type: array
+                x-kubernetes-list-type: atomic
               observedGeneration:
                 description: ObservedGeneration is the generation of the spec the
                   status reports on.
