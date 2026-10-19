@@ -42,8 +42,9 @@ func Status(existing v1alpha1.PoolObservationStatus, generation int64, observed 
 			Ready:       observed.Nodes.Ready,
 			Schedulable: observed.Nodes.Schedulable,
 		},
-		UnschedulablePods: int32(len(observed.UnschedulablePods)), //nolint:gosec // A pool can't approach 2^31 unschedulable pods.
-		ExtendedResources: observed.ExtendedResources,
+		UnschedulablePods:  int32(len(observed.UnschedulablePods)), //nolint:gosec // A pool can't approach 2^31 unschedulable pods.
+		NodesByFreeDevices: NodesByFreeDevices(observed.Free),
+		ExtendedResources:  observed.ExtendedResources,
 	}
 	for _, d := range observed.Devices {
 		status.Devices = append(status.Devices, DeviceClassStatus(d))
@@ -90,20 +91,44 @@ func DeviceClassStatus(d pool.Devices) v1alpha1.DeviceClassStatus {
 		Attributes:      d.Attributes,
 	}
 
-	nodes := map[int32]int32{}
 	for _, nd := range d.Schedulable {
 		s.Allocatable += nd.Allocatable
 		s.Allocated += nd.Allocated
-		nodes[nd.Allocatable-nd.Allocated]++
 	}
-	for _, free := range slices.Sorted(maps.Keys(nodes)) {
-		s.NodesByFreeDevices = append(s.NodesByFreeDevices, v1alpha1.FreeDevicesBucket{
-			FreeDevices: free,
-			Nodes:       nodes[free],
-		})
-	}
-
 	return s
+}
+
+// NodesByFreeDevices returns a histogram of nodes by their free devices, given
+// each node's free devices. Nodes with the same number of free devices of
+// every class share a bucket. Buckets are sorted by their free devices, so
+// the same nodes always produce the same histogram.
+func NodesByFreeDevices(free map[string]pool.FreeDevices) []v1alpha1.FreeDevicesBucket {
+	sorted := slices.SortedFunc(maps.Values(free), CompareFreeDevices)
+
+	var buckets []v1alpha1.FreeDevicesBucket
+	for _, f := range sorted {
+		if n := len(buckets); n > 0 && maps.Equal(buckets[n-1].FreeDevices, f) {
+			buckets[n-1].Nodes++
+			continue
+		}
+		buckets = append(buckets, v1alpha1.FreeDevicesBucket{FreeDevices: maps.Clone(f), Nodes: 1})
+	}
+	return buckets
+}
+
+// CompareFreeDevices orders two nodes' free devices. It compares their
+// classes in name order, then their counts of each.
+func CompareFreeDevices(a, b pool.FreeDevices) int {
+	ac, bc := slices.Sorted(maps.Keys(a)), slices.Sorted(maps.Keys(b))
+	if c := slices.Compare(ac, bc); c != 0 {
+		return c
+	}
+	for _, class := range ac {
+		if c := cmp.Compare(a[class], b[class]); c != 0 {
+			return c
+		}
+	}
+	return 0
 }
 
 // Healthy returns a pool's Healthy condition. It's False when any of the

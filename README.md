@@ -45,21 +45,25 @@ status:
     nodes: 1
     allocatable: 4
     allocated: 3
-    nodesByFreeDevices:       # Schedulable nodes, by how many GPUs are free.
-    - freeDevices: 1
-      nodes: 1
     attributes:               # Values every GPU in the pool shares.
       productName: {string: NVIDIA L4}
       driverVersion: {version: 580.178.4}
       # Six more omitted for brevity.
+  nodesByFreeDevices:         # Schedulable nodes, by free devices of each class.
+  - freeDevices:
+      gpu.nvidia.com: 1
+    nodes: 1
 ```
 
-The fleet scheduler can use `nodesByFreeDevices` to check whether a replica fits
+The fleet scheduler uses `nodesByFreeDevices` to check whether a replica fits
 ([modelplane#172](https://github.com/modelplaneai/modelplane/issues/172)). Here
-a pod claiming one GPU fits, and one claiming two doesn't. Its size depends on
-GPUs per node, not on how many nodes the pool has. `ScaleUpBlocked` says the
-cluster autoscaler won't add a node for a pinned pod. The pool's `attributes`
-show what hardware it really has, to check against its InferenceClass.
+a pod claiming one GPU fits, and one claiming two doesn't. Nodes share a bucket
+only when they have the same number of free devices of every class, so a pod
+that claims GPUs and network devices fits only a node with enough of both. The
+histogram's size depends on devices per node, not on how many nodes the pool
+has. `ScaleUpBlocked` says the cluster autoscaler won't add a node for a pinned
+pod. The pool's `attributes` show what hardware it really has, to check against
+its InferenceClass.
 
 A `ReplicaObservation` reports on the pods its selector matches.
 

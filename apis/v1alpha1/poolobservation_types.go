@@ -95,6 +95,16 @@ type PoolObservationStatus struct {
 	// +kubebuilder:validation:MaxItems=32
 	Devices []DeviceClassStatus `json:"devices,omitempty"`
 
+	// NodesByFreeDevices is a histogram of the pool's schedulable nodes, by
+	// how many devices of each DeviceClass are allocatable and not allocated
+	// on them. Nodes with the same number of free devices of every class
+	// share a bucket.
+	//
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=256
+	NodesByFreeDevices []FreeDevicesBucket `json:"nodesByFreeDevices,omitempty"`
+
 	// ExtendedResources sums the extended resources, such as nvidia.com/gpu,
 	// that the pool's nodes advertise as allocatable. A device plugin
 	// advertises these. One advertising the same hardware a DRA driver
@@ -147,16 +157,6 @@ type DeviceClassStatus struct {
 	// +kubebuilder:validation:Minimum=0
 	Allocated int32 `json:"allocated"`
 
-	// NodesByFreeDevices is a histogram of the schedulable nodes that
-	// publish devices of the class, by how many of those devices are
-	// allocatable and not allocated.
-	//
-	// +optional
-	// +listType=map
-	// +listMapKey=freeDevices
-	// +kubebuilder:validation:MaxItems=129
-	NodesByFreeDevices []FreeDevicesBucket `json:"nodesByFreeDevices,omitempty"`
-
 	// Attributes are the device attributes every device of the class in the
 	// pool agrees on, keyed by the attribute names the DRA driver publishes.
 	//
@@ -165,14 +165,16 @@ type DeviceClassStatus struct {
 	Attributes map[resourcev1.QualifiedName]resourcev1.DeviceAttribute `json:"attributes,omitempty"`
 }
 
-// A FreeDevicesBucket counts the nodes with a number of free devices.
+// A FreeDevicesBucket counts the nodes with the same free devices.
 type FreeDevicesBucket struct {
-	// FreeDevices is the number of free devices.
+	// FreeDevices counts each of the nodes' free devices, keyed by
+	// DeviceClass. A class the nodes publish no devices of is absent.
 	//
-	// +kubebuilder:validation:Minimum=0
-	FreeDevices int32 `json:"freeDevices"`
+	// +optional
+	// +kubebuilder:validation:MaxProperties=32
+	FreeDevices map[string]int32 `json:"freeDevices,omitempty"`
 
-	// Nodes counts the nodes with that many free devices.
+	// Nodes counts the nodes with these free devices.
 	//
 	// +kubebuilder:validation:Minimum=1
 	Nodes int32 `json:"nodes"`

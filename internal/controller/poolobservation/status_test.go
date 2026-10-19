@@ -73,6 +73,10 @@ func TestStatus(t *testing.T) {
 							},
 						},
 					},
+					Free: map[string]pool.FreeDevices{
+						"node-a": {"gpu.nvidia.com": 3},
+						"node-b": {"gpu.nvidia.com": 4},
+					},
 					ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
 					UnschedulablePods: []pool.UnschedulablePod{
 						{
@@ -97,14 +101,14 @@ func TestStatus(t *testing.T) {
 						Nodes:           2,
 						Allocatable:     8,
 						Allocated:       1,
-						NodesByFreeDevices: []v1alpha1.FreeDevicesBucket{
-							{FreeDevices: 3, Nodes: 1},
-							{FreeDevices: 4, Nodes: 1},
-						},
 						Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
 							"productName": {StringValue: new("NVIDIA L4")},
 						},
 					},
+				},
+				NodesByFreeDevices: []v1alpha1.FreeDevicesBucket{
+					{FreeDevices: map[string]int32{"gpu.nvidia.com": 3}, Nodes: 1},
+					{FreeDevices: map[string]int32{"gpu.nvidia.com": 4}, Nodes: 1},
 				},
 				ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
 			},
@@ -222,8 +226,8 @@ func TestDeviceClassStatus(t *testing.T) {
 		d      pool.Devices
 		want   v1alpha1.DeviceClassStatus
 	}{
-		"Histogram": {
-			reason: "Schedulable nodes should be counted by how many of their allocatable devices aren't allocated.",
+		"Totals": {
+			reason: "A class's allocatable and allocated devices should be summed across its schedulable nodes.",
 			d: pool.Devices{
 				DeviceClassName: "gpu.nvidia.com",
 				Nodes:           4,
@@ -238,14 +242,10 @@ func TestDeviceClassStatus(t *testing.T) {
 				Nodes:           4,
 				Allocatable:     12,
 				Allocated:       6,
-				NodesByFreeDevices: []v1alpha1.FreeDevicesBucket{
-					{FreeDevices: 0, Nodes: 1},
-					{FreeDevices: 3, Nodes: 2},
-				},
 			},
 		},
 		"NoSchedulableNodes": {
-			reason: "A class with no devices on schedulable nodes has nothing allocatable and an empty histogram.",
+			reason: "A class with no devices on schedulable nodes has nothing allocatable.",
 			d: pool.Devices{
 				DeviceClassName: "gpu.nvidia.com",
 				Nodes:           1,
@@ -264,6 +264,66 @@ func TestDeviceClassStatus(t *testing.T) {
 			got := DeviceClassStatus(tc.d)
 			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("\n%s\nDeviceClassStatus(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestNodesByFreeDevices(t *testing.T) {
+	cases := map[string]struct {
+		reason string
+		free   map[string]pool.FreeDevices
+		want   []v1alpha1.FreeDevicesBucket
+	}{
+		"NoNodes": {
+			reason: "A pool with no schedulable nodes has an empty histogram.",
+			free:   nil,
+			want:   nil,
+		},
+		"OneClass": {
+			reason: "Nodes with the same number of free devices should share a bucket, and buckets should be sorted by how many are free.",
+			free: map[string]pool.FreeDevices{
+				"node-a": {"gpu.nvidia.com": 3},
+				"node-b": {"gpu.nvidia.com": 0},
+				"node-c": {"gpu.nvidia.com": 3},
+			},
+			want: []v1alpha1.FreeDevicesBucket{
+				{FreeDevices: map[string]int32{"gpu.nvidia.com": 0}, Nodes: 1},
+				{FreeDevices: map[string]int32{"gpu.nvidia.com": 3}, Nodes: 2},
+			},
+		},
+		"SeveralClasses": {
+			reason: "Nodes should share a bucket only when they have the same number of free devices of every class.",
+			free: map[string]pool.FreeDevices{
+				"node-a": {"gpu.nvidia.com": 4, "efa.networking.k8s.aws": 8},
+				"node-b": {"gpu.nvidia.com": 4, "efa.networking.k8s.aws": 0},
+				"node-c": {"gpu.nvidia.com": 4, "efa.networking.k8s.aws": 8},
+				"node-d": {"gpu.nvidia.com": 0, "efa.networking.k8s.aws": 16},
+			},
+			want: []v1alpha1.FreeDevicesBucket{
+				{FreeDevices: map[string]int32{"gpu.nvidia.com": 4, "efa.networking.k8s.aws": 0}, Nodes: 1},
+				{FreeDevices: map[string]int32{"gpu.nvidia.com": 4, "efa.networking.k8s.aws": 8}, Nodes: 2},
+				{FreeDevices: map[string]int32{"gpu.nvidia.com": 0, "efa.networking.k8s.aws": 16}, Nodes: 1},
+			},
+		},
+		"NoDevices": {
+			reason: "A node that publishes no devices of a class should count in a different bucket from one with none of them free.",
+			free: map[string]pool.FreeDevices{
+				"node-a": {},
+				"node-b": {"gpu.nvidia.com": 0},
+			},
+			want: []v1alpha1.FreeDevicesBucket{
+				{FreeDevices: map[string]int32{}, Nodes: 1},
+				{FreeDevices: map[string]int32{"gpu.nvidia.com": 0}, Nodes: 1},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := NodesByFreeDevices(tc.free)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("\n%s\nNodesByFreeDevices(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}

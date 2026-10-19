@@ -71,6 +71,10 @@ type Observation struct {
 	// Devices are the pool's devices by DeviceClass, sorted by class name.
 	Devices []Devices
 
+	// Free counts each of the pool's schedulable nodes' free devices, keyed
+	// by node name.
+	Free map[string]FreeDevices
+
 	// TaintedDevices counts the pool's devices with a taint that keeps new
 	// claims from allocating them, whatever their class.
 	TaintedDevices int32
@@ -121,6 +125,11 @@ type NodeDevices struct {
 	// Allocated counts the allocatable devices a claim has allocated.
 	Allocated int32
 }
+
+// FreeDevices counts one node's devices that are allocatable and not
+// allocated, keyed by DeviceClass. A class the node publishes no devices of is
+// absent.
+type FreeDevices map[string]int32
 
 // ScaleUp is the cluster autoscaler's latest verdict on an unschedulable pod.
 type ScaleUp string
@@ -195,6 +204,7 @@ func (o *Observer) ObservePool(ctx context.Context, name string, in Inputs) (Obs
 	return Observation{
 		Nodes:             CountNodes(nodes),
 		Devices:           byClass,
+		Free:              Free(byClass, m),
 		TaintedDevices:    TaintedDevices(devices, m),
 		ExtendedResources: ExtendedResources(nodes),
 		UnschedulablePods: UnschedulablePods(name, in.Pods, in.Events),
@@ -330,6 +340,21 @@ func (o *Observer) DevicesByClass(ctx context.Context, devices map[dra.DeviceID]
 	}
 	slices.SortFunc(out, func(a, b Devices) int { return strings.Compare(a.DeviceClassName, b.DeviceClassName) })
 	return out, nil
+}
+
+// Free returns each schedulable node's free devices, keyed by node name. A
+// schedulable node that publishes no devices has none free.
+func Free(byClass []Devices, m Membership) map[string]FreeDevices {
+	free := make(map[string]FreeDevices, len(m.Schedulable))
+	for name := range m.Schedulable {
+		free[name] = FreeDevices{}
+	}
+	for _, ds := range byClass {
+		for name, nd := range ds.Schedulable {
+			free[name][ds.DeviceClassName] = nd.Allocatable - nd.Allocated
+		}
+	}
+	return free
 }
 
 // UnschedulablePods returns the unschedulable pods pinned to the named pool by

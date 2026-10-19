@@ -91,6 +91,7 @@ func TestObservePool(t *testing.T) {
 						Attributes:      l4Attributes,
 					},
 				},
+				Free: map[string]FreeDevices{"ip-10-0-54-161.ec2.internal": {"gpu.nvidia.com": 0}},
 				UnschedulablePods: []UnschedulablePod{
 					{
 						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -113,6 +114,7 @@ func TestObservePool(t *testing.T) {
 						Attributes:      l4Attributes,
 					},
 				},
+				Free: map[string]FreeDevices{"ip-10-0-54-161.ec2.internal": {"gpu.nvidia.com": 1}},
 				UnschedulablePods: []UnschedulablePod{
 					{
 						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -157,10 +159,11 @@ func TestObservePool(t *testing.T) {
 			},
 		},
 		"NoDevices": {
-			reason: "A pool whose nodes publish no devices should report only its nodes.",
+			reason: "A pool whose nodes publish no devices should report only its nodes, with no devices free.",
 			args:   args{pool: "system", in: full},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
+				Free:  map[string]FreeDevices{"ip-10-0-69-153.ec2.internal": {}},
 			},
 		},
 		"UnknownPool": {
