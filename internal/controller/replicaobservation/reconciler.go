@@ -41,10 +41,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
+	"github.com/modelplaneai/cluster-agent/internal/allocation"
+	"github.com/modelplaneai/cluster-agent/internal/pool"
 	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
 
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=nodes;pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=resource.k8s.io,resources=resourceslices;resourceclaims,verbs=get;list;watch
 // +kubebuilder:rbac:groups=agent.modelplane.ai,resources=replicaobservations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=agent.modelplane.ai,resources=replicaobservations/status,verbs=get;patch
@@ -74,6 +76,7 @@ func (fn ReplicaObserverFn) ObserveReplica(in replica.Inputs) replica.Observatio
 // the status of its ReplicaObservation.
 type Reconciler struct {
 	client   client.Client
+	record   *allocation.Record
 	observer ReplicaObserver
 	log      *slog.Logger
 }
@@ -93,10 +96,11 @@ func WithReplicaObserver(o ReplicaObserver) ReconcilerOption {
 }
 
 // NewReconciler returns a Reconciler that reads and writes through the
-// supplied client.
-func NewReconciler(c client.Client, opts ...ReconcilerOption) *Reconciler {
+// supplied client, and reads ResourceClaims through the supplied Record.
+func NewReconciler(c client.Client, record *allocation.Record, opts ...ReconcilerOption) *Reconciler {
 	r := &Reconciler{
 		client:   c,
+		record:   record,
 		observer: ReplicaObserverFn(replica.Observe),
 		log:      slog.New(slog.DiscardHandler),
 	}
@@ -106,8 +110,9 @@ func NewReconciler(c client.Client, opts ...ReconcilerOption) *Reconciler {
 	return r
 }
 
-// Setup adds a ReplicaObservation controller to the manager.
-func Setup(mgr ctrl.Manager, log *slog.Logger) error {
+// Setup adds a ReplicaObservation controller to the manager. It reads
+// ResourceClaims through the supplied Record.
+func Setup(mgr ctrl.Manager, record *allocation.Record, log *slog.Logger) error {
 	c := mgr.GetClient()
 	err := ctrl.NewControllerManagedBy(mgr).
 		Named("replicaobservation").
@@ -121,7 +126,7 @@ func Setup(mgr ctrl.Manager, log *slog.Logger) error {
 		// but the claim cache can lag the pod cache. Watching claims catches
 		// an allocation the pod's binding raced ahead of.
 		Watches(&resourcev1.ResourceClaim{}, handler.EnqueueRequestsFromMapFunc(ClaimRequests(c))).
-		Complete(NewReconciler(c, WithLogger(log.With("controller", "replicaobservation"))))
+		Complete(NewReconciler(c, record, WithLogger(log.With("controller", "replicaobservation"))))
 	if err != nil {
 		return fmt.Errorf("cannot create controller: %w", err)
 	}
@@ -215,26 +220,49 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
 	var claims []resourcev1.ResourceClaim
-	for _, p := range pods.Items {
-		for _, name := range replica.ClaimNames(p) {
-			claim := &resourcev1.ResourceClaim{}
-			err := r.client.Get(ctx, types.NamespacedName{Namespace: p.GetNamespace(), Name: name}, claim, client.UnsafeDisableDeepCopy)
-			if kerrors.IsNotFound(err) {
-				// A claim that doesn't exist hasn't allocated any devices.
+	allocatedAt, err := r.record.Read(func() ([]resourcev1.ResourceClaim, error) {
+		for _, p := range pods.Items {
+			if replica.Finished(p) {
 				continue
 			}
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("cannot get ResourceClaim %q: %w", name, err)
+			for _, name := range replica.ClaimNames(p) {
+				claim := &resourcev1.ResourceClaim{}
+				err := r.client.Get(ctx, types.NamespacedName{Namespace: p.GetNamespace(), Name: name}, claim, client.UnsafeDisableDeepCopy)
+				if kerrors.IsNotFound(err) {
+					// A claim that doesn't exist hasn't allocated any devices.
+					continue
+				}
+				if err != nil {
+					return nil, fmt.Errorf("cannot get ResourceClaim %q: %w", name, err)
+				}
+				claims = append(claims, *claim)
 			}
-			claims = append(claims, *claim)
 		}
+		return claims, nil
+	})
+	if err != nil {
+		return reconcile.Result{}, err //nolint:wrapcheck // Read returns the error the read function wrapped.
 	}
 	rslices := &resourcev1.ResourceSliceList{}
 	if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list ResourceSlices: %w", err)
 	}
+	nodes := &corev1.NodeList{}
+	if err := r.client.List(ctx, nodes, client.HasLabels{pool.LabelPool}, client.UnsafeDisableDeepCopy); err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot list nodes: %w", err)
+	}
+	nodePools := make(map[string]string, len(nodes.Items))
+	for _, n := range nodes.Items {
+		nodePools[n.GetName()] = n.GetLabels()[pool.LabelPool]
+	}
 
-	o := r.observer.ObserveReplica(replica.Inputs{Pods: pods.Items, Claims: claims, Slices: rslices.Items})
+	o := r.observer.ObserveReplica(replica.Inputs{
+		Pods:        pods.Items,
+		Claims:      claims,
+		Slices:      rslices.Items,
+		NodePools:   nodePools,
+		AllocatedAt: allocatedAt,
+	})
 	err = ApplyStatus(ctx, r.client, req.NamespacedName, Status(observation.Status, observation.GetGeneration(), o))
 	if kerrors.IsInvalid(err) {
 		// The API server rejects a status that exceeds the schema's bounds,

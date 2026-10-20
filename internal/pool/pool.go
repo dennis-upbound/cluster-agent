@@ -61,6 +61,10 @@ type Inputs struct {
 	Claims  []resourcev1.ResourceClaim
 	Pods    []corev1.Pod
 	Events  []corev1.Event
+
+	// AllocatedAt is when the agent first saw each allocated claim, keyed by
+	// the claim's UID.
+	AllocatedAt map[types.UID]time.Time
 }
 
 // An Observation is what's true of a pool.
@@ -74,6 +78,11 @@ type Observation struct {
 	// Free counts each of the pool's schedulable nodes' free devices, keyed
 	// by node name.
 	Free map[string]FreeDevices
+
+	// LastAllocation is the latest time the agent first saw one of the claims
+	// that hold devices on the pool's nodes allocated. It's zero when no claim
+	// does.
+	LastAllocation time.Time
 
 	// TaintedDevices counts the pool's devices with a taint that keeps new
 	// claims from allocating them, whatever their class.
@@ -205,6 +214,7 @@ func (o *Observer) ObservePool(ctx context.Context, name string, in Inputs) (Obs
 		Nodes:             CountNodes(nodes),
 		Devices:           byClass,
 		Free:              Free(byClass, m),
+		LastAllocation:    LastAllocation(in.Claims, in.AllocatedAt, devices, m),
 		TaintedDevices:    TaintedDevices(devices, m),
 		ExtendedResources: ExtendedResources(nodes),
 		UnschedulablePods: UnschedulablePods(name, in.Pods, in.Events),
@@ -271,6 +281,24 @@ func Allocated(claims []resourcev1.ResourceClaim) map[dra.DeviceID]bool {
 		}
 	}
 	return allocated
+}
+
+// LastAllocation returns the latest time the agent first saw one of the
+// supplied claims that hold devices on a pool's nodes allocated, given when it
+// first saw each allocated. It returns the zero time when none of the claims
+// hold devices on the pool's nodes.
+func LastAllocation(claims []resourcev1.ResourceClaim, allocatedAt map[types.UID]time.Time, devices map[dra.DeviceID]dra.Device, m Membership) time.Time {
+	var latest time.Time
+	for i := range claims {
+		at := allocatedAt[claims[i].UID]
+		if !at.After(latest) {
+			continue
+		}
+		if slices.ContainsFunc(dra.Allocations(&claims[i]), func(id dra.DeviceID) bool { return m.Nodes[devices[id].NodeName] }) {
+			latest = at
+		}
+	}
+	return latest
 }
 
 // TaintedDevices counts a pool's devices that carry a taint that keeps new

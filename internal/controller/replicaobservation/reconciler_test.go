@@ -22,6 +22,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -40,6 +41,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
+	"github.com/modelplaneai/cluster-agent/internal/allocation"
+	"github.com/modelplaneai/cluster-agent/internal/pool"
 	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
 
@@ -53,6 +56,7 @@ var ignoreResourceVersion = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceV
 
 func TestReconcile(t *testing.T) {
 	now := metav1.Now()
+	allocated := time.Date(2026, 9, 1, 0, 0, 0, 123456000, time.UTC)
 	req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ml", Name: "llama"}}
 
 	scheme := runtime.NewScheme()
@@ -125,7 +129,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		"ReadsReplica": {
-			reason: "Only the replica's pods and the ResourceClaims they name should be observed. A pod the selector matches that isn't part of a replica shouldn't be, and a claim that doesn't exist yet should be skipped.",
+			reason: "Only the replica's pods, the ResourceClaims they name, and when each claim was first seen allocated should be observed, with the pool of each node in one. A pod the selector matches that isn't part of a replica shouldn't be, and a claim that doesn't exist yet should be skipped.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.ReplicaObservation{
@@ -140,10 +144,15 @@ func TestReconcile(t *testing.T) {
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0", Labels: map[string]string{"app": "qwen", replica.LabelReplica: "qwen"}}},
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-debug", Labels: map[string]string{"app": "llama"}}},
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "other", Name: "llama-0", Labels: map[string]string{"app": "llama", replica.LabelReplica: "llama"}}},
-					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
+					&resourcev1.ResourceClaim{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu", UID: "llama-0-gpu"},
+						Status:     resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{}},
+					},
 					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0-gpu"}},
 					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "other", Name: "llama-0-gpu"}},
 					&resourcev1.ResourceSlice{ObjectMeta: metav1.ObjectMeta{Name: "node-a-gpu"}, Spec: resourcev1.ResourceSliceSpec{Driver: "gpu.nvidia.com", Pool: resourcev1.ResourcePool{Name: "node-a"}}},
+					&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", Labels: map[string]string{pool.LabelPool: "gpu"}}},
+					&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-0"}},
 				},
 			},
 			want: want{
@@ -154,11 +163,16 @@ func TestReconcile(t *testing.T) {
 						Status:     corev1.PodStatus{ResourceClaimStatuses: []corev1.PodResourceClaimStatus{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}}},
 					}},
 					Claims: []resourcev1.ResourceClaim{
-						{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
+						{
+							ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu", UID: "llama-0-gpu"},
+							Status:     resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{}},
+						},
 					},
 					Slices: []resourcev1.ResourceSlice{
 						{ObjectMeta: metav1.ObjectMeta{Name: "node-a-gpu"}, Spec: resourcev1.ResourceSliceSpec{Driver: "gpu.nvidia.com", Pool: resourcev1.ResourcePool{Name: "node-a"}}},
 					},
+					NodePools:   map[string]string{"node-a": "gpu"},
+					AllocatedAt: map[types.UID]time.Time{"llama-0-gpu": allocated},
 				},
 				status: &v1alpha1.ReplicaObservationStatus{
 					ObservedGeneration: 1,
@@ -175,7 +189,10 @@ func TestReconcile(t *testing.T) {
 				objects: []client.Object{
 					&v1alpha1.ReplicaObservation{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama", Generation: 1}},
 				},
-				observation: replica.Observation{Pods: []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}}},
+				observation: replica.Observation{
+					Pods:  []replica.Pod{{Name: "llama-0", Scheduling: replica.Scheduled, Ready: true}},
+					Pools: []replica.Pool{{Name: "gpu", LastAllocation: allocated}},
+				},
 			},
 			want: want{
 				status: &v1alpha1.ReplicaObservationStatus{
@@ -184,7 +201,8 @@ func TestReconcile(t *testing.T) {
 						{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsScheduled, ObservedGeneration: 1, LastTransitionTime: now},
 						{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsReady, ObservedGeneration: 1, LastTransitionTime: now},
 					},
-					Pods: v1alpha1.PodCounts{Total: 1, Scheduled: 1, Ready: 1},
+					Pods:  v1alpha1.PodCounts{Total: 1, Scheduled: 1, Ready: 1},
+					Pools: []v1alpha1.AllocatedPool{{Name: "gpu", LastAllocationTime: metav1.NewMicroTime(allocated)}},
 				},
 			},
 		},
@@ -268,6 +286,26 @@ func TestReconcile(t *testing.T) {
 				status: &v1alpha1.ReplicaObservationStatus{},
 			},
 		},
+		"ListNodesError": {
+			reason: "An error listing the nodes the replica's devices might be on should be returned, without changing the status.",
+			params: params{
+				objects: []client.Object{
+					&v1alpha1.ReplicaObservation{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama"}},
+				},
+				interceptor: interceptor.Funcs{
+					List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						if _, ok := list.(*corev1.NodeList); ok {
+							return errBoom
+						}
+						return c.List(ctx, list, opts...)
+					},
+				},
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.ReplicaObservationStatus{},
+			},
+		},
 		"StatusRejectedApplyError": {
 			reason: "An error applying the status that reports a rejected status should be returned.",
 			params: params{
@@ -312,9 +350,8 @@ func TestReconcile(t *testing.T) {
 				WithStatusSubresource(&v1alpha1.ReplicaObservation{}).
 				WithInterceptorFuncs(tc.params.interceptor).
 				Build()
-
 			var inputs replica.Inputs
-			r := NewReconciler(c, WithReplicaObserver(ReplicaObserverFn(func(in replica.Inputs) replica.Observation {
+			r := NewReconciler(c, allocation.NewRecord(time.Time{}, allocation.WithClock(func() time.Time { return allocated })), WithReplicaObserver(ReplicaObserverFn(func(in replica.Inputs) replica.Observation {
 				inputs = in
 				return tc.params.observation
 			})))

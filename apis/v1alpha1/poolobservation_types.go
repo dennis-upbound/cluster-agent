@@ -105,6 +105,17 @@ type PoolObservationStatus struct {
 	// +kubebuilder:validation:MaxItems=256
 	NodesByFreeDevices []FreeDevicesBucket `json:"nodesByFreeDevices,omitempty"`
 
+	// LastAllocationTime is the latest time the agent first saw a ResourceClaim
+	// allocated devices on the pool's nodes. It never goes back. The agent
+	// observes the pool from a view of the cluster that includes every claim it
+	// saw allocated at or before this time, unless the claim has since been
+	// deallocated. So NodesByFreeDevices accounts for the devices of a
+	// ReplicaObservation whose lastAllocationTime for the pool is no later than
+	// this, unless they've since been deallocated.
+	//
+	// +optional
+	LastAllocationTime *metav1.MicroTime `json:"lastAllocationTime,omitempty"`
+
 	// ExtendedResources sums the extended resources, such as nvidia.com/gpu,
 	// that the pool's nodes advertise as allocatable. A device plugin
 	// advertises these. One advertising the same hardware a DRA driver

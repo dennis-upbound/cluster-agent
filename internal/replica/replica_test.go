@@ -18,9 +18,11 @@ package replica
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -28,6 +30,7 @@ import (
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/modelplaneai/cluster-agent/internal/dra"
 )
@@ -46,6 +49,17 @@ func TestObserve(t *testing.T) {
 	claims := load[resourcev1.ResourceClaimList](t, filepath.Join("testdata", "claims.json")).Items
 	rslices := load[resourcev1.ResourceSliceList](t, filepath.Join("testdata", "slices.json")).Items
 
+	start := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
+	nodePools := map[string]string{
+		"ip-10-0-54-161.ec2.internal": "gpu-l4x4-a",
+		"ip-10-0-69-153.ec2.internal": "system",
+	}
+	// When the agent first saw each of the allocated claims.
+	allocatedAt := map[types.UID]time.Time{
+		"d18cf08e-3135-4b08-acf0-0db06605d2eb": start,                  // one-gpu-57bf7796f9-f6vrt
+		"bd5b9231-19f7-4ebb-92c9-6a9a990e8c89": start.Add(time.Second), // two-gpu-7f7ff797d7-vs2w9
+	}
+
 	// The captured pods, grouped by the replica they belong to.
 	selected := map[string][]corev1.Pod{}
 	for _, p := range pods {
@@ -59,8 +73,8 @@ func TestObserve(t *testing.T) {
 		want   Observation
 	}{
 		"OneGPU": {
-			reason: "A running replica should report its pod and the device allocated to it.",
-			in:     Inputs{Pods: selected["one-gpu"], Claims: claims, Slices: rslices},
+			reason: "A running replica should report its pod, the device allocated to it, and when the device's pool was allocated to it.",
+			in:     Inputs{Pods: selected["one-gpu"], Claims: claims, Slices: rslices, NodePools: nodePools, AllocatedAt: allocatedAt},
 			want: Observation{
 				Pods: []Pod{
 					{Name: "one-gpu-57bf7796f9-f6vrt", Scheduling: Scheduled, Ready: true},
@@ -72,11 +86,12 @@ func TestObserve(t *testing.T) {
 						UUID:     "GPU-22d002d7-9f44-8df8-be6a-ed374d260c75",
 					},
 				},
+				Pools: []Pool{{Name: "gpu-l4x4-a", LastAllocation: start}},
 			},
 		},
 		"TwoGPU": {
 			reason: "A replica with two devices should report both, sorted.",
-			in:     Inputs{Pods: selected["two-gpu"], Claims: claims, Slices: rslices},
+			in:     Inputs{Pods: selected["two-gpu"], Claims: claims, Slices: rslices, NodePools: nodePools, AllocatedAt: allocatedAt},
 			want: Observation{
 				Pods: []Pod{
 					{Name: "two-gpu-7f7ff797d7-vs2w9", Scheduling: Scheduled, Ready: true},
@@ -93,24 +108,26 @@ func TestObserve(t *testing.T) {
 						UUID:     "GPU-df9aa0e4-eeb5-f9ec-3eb8-2c20dd4df42d",
 					},
 				},
+				Pools: []Pool{{Name: "gpu-l4x4-a", LastAllocation: start.Add(time.Second)}},
 			},
 		},
 		"Unschedulable": {
-			reason: "A pod the scheduler can't place should report why, and have no devices.",
-			in:     Inputs{Pods: selected["too-big"], Claims: claims, Slices: rslices},
+			reason: "A pod the scheduler can't place should report why, and have no devices or allocated claims.",
+			in:     Inputs{Pods: selected["too-big"], Claims: claims, Slices: rslices, NodePools: nodePools, AllocatedAt: allocatedAt},
 			want: Observation{
 				Pods: []Pod{
 					{
 						Name:              "too-big-5859cf75cf-jzm8n",
 						Scheduling:        Unschedulable,
 						SchedulingMessage: "0/2 nodes are available: 1 cannot allocate all claims, 1 node(s) didn't match Pod's node affinity/selector. still not schedulable, preemption: 0/2 nodes are available: 2 Preemption is not helpful for scheduling.",
+						UnallocatedClaims: []string{"too-big-5859cf75cf-jzm8n-gpu-86w5w"},
 					},
 				},
 			},
 		},
 		"ImagePullBackOff": {
 			reason: "A scheduled pod whose container can't start should report why it's waiting.",
-			in:     Inputs{Pods: selected["bad-image"], Claims: claims, Slices: rslices},
+			in:     Inputs{Pods: selected["bad-image"], Claims: claims, Slices: rslices, NodePools: nodePools, AllocatedAt: allocatedAt},
 			want: Observation{
 				Pods: []Pod{
 					{
@@ -159,6 +176,173 @@ func TestObserve(t *testing.T) {
 				Devices: []Device{{ID: dra.DeviceID{Driver: "nic.example.org", Pool: "fabric", Device: "nic-0"}}},
 			},
 		},
+		"ClaimNotSeen": {
+			reason: "A bound pod whose claim the agent can't find yet should report the claim unallocated.",
+			in: Inputs{
+				Pods: []corev1.Pod{{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0"},
+					Spec: corev1.PodSpec{
+						NodeName:       "node-a",
+						ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}},
+					},
+				}},
+			},
+			want: Observation{
+				Pods: []Pod{{Name: "llama-0", Scheduling: Scheduled, UnallocatedClaims: []string{"llama-0-gpu"}}},
+			},
+		},
+		"Finished": {
+			reason: "Pods that have run to completion, like an evicted one, shouldn't be observed, nor should a claim one still names.",
+			in: Inputs{
+				Pods: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0"},
+						Spec: corev1.PodSpec{
+							NodeName:       "node-a",
+							ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("llama-0-gpu")}},
+						},
+						Status: corev1.PodStatus{Phase: corev1.PodFailed, Reason: "Evicted"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-1"},
+						Spec:       corev1.PodSpec{NodeName: "node-a"},
+						Status:     corev1.PodStatus{Phase: corev1.PodSucceeded},
+					},
+				},
+				// The claim hasn't been deallocated yet.
+				Claims: []resourcev1.ResourceClaim{{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu", UID: "llama-0-gpu"},
+					Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+						Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+							{Request: "gpu", Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0"},
+						}},
+					}},
+				}},
+				Slices: []resourcev1.ResourceSlice{{Spec: resourcev1.ResourceSliceSpec{
+					Driver:   "gpu.nvidia.com",
+					Pool:     resourcev1.ResourcePool{Name: "node-a", ResourceSliceCount: 1},
+					NodeName: new("node-a"),
+					Devices:  []resourcev1.Device{{Name: "gpu-0"}},
+				}}},
+				NodePools:   map[string]string{"node-a": "gpu"},
+				AllocatedAt: map[types.UID]time.Time{"llama-0-gpu": start},
+			},
+			want: Observation{},
+		},
+		"SeveralPools": {
+			reason: "A replica should report the latest allocation of its claims on each pool, but not on a node in no pool.",
+			in: Inputs{
+				Pods: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "prefill-0"},
+						Spec: corev1.PodSpec{
+							NodeName:       "node-a",
+							ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("prefill-0-gpu")}},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "prefill-1"},
+						Spec: corev1.PodSpec{
+							NodeName:       "node-a",
+							ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("prefill-1-gpu")}},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "decode-0"},
+						Spec: corev1.PodSpec{
+							NodeName:       "node-b",
+							ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("decode-0-gpu")}},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "decode-1"},
+						Spec: corev1.PodSpec{
+							NodeName:       "node-c",
+							ResourceClaims: []corev1.PodResourceClaim{{Name: "gpu", ResourceClaimName: new("decode-1-gpu")}},
+						},
+					},
+				},
+				Claims: []resourcev1.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "prefill-0-gpu", UID: "prefill-0-gpu"},
+						Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+							Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+								{Request: "gpu", Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0"},
+							}},
+						}},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "prefill-1-gpu", UID: "prefill-1-gpu"},
+						Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+							Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+								{Request: "gpu", Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-1"},
+							}},
+						}},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "decode-0-gpu", UID: "decode-0-gpu"},
+						Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+							Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+								{Request: "gpu", Driver: "gpu.nvidia.com", Pool: "node-b", Device: "gpu-0"},
+							}},
+						}},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "decode-1-gpu", UID: "decode-1-gpu"},
+						Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+							Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+								{Request: "gpu", Driver: "gpu.nvidia.com", Pool: "node-c", Device: "gpu-0"},
+							}},
+						}},
+					},
+				},
+				Slices: []resourcev1.ResourceSlice{
+					{Spec: resourcev1.ResourceSliceSpec{
+						Driver:   "gpu.nvidia.com",
+						Pool:     resourcev1.ResourcePool{Name: "node-a", ResourceSliceCount: 1},
+						NodeName: new("node-a"),
+						Devices:  []resourcev1.Device{{Name: "gpu-0"}, {Name: "gpu-1"}},
+					}},
+					{Spec: resourcev1.ResourceSliceSpec{
+						Driver:   "gpu.nvidia.com",
+						Pool:     resourcev1.ResourcePool{Name: "node-b", ResourceSliceCount: 1},
+						NodeName: new("node-b"),
+						Devices:  []resourcev1.Device{{Name: "gpu-0"}},
+					}},
+					{Spec: resourcev1.ResourceSliceSpec{
+						Driver:   "gpu.nvidia.com",
+						Pool:     resourcev1.ResourcePool{Name: "node-c", ResourceSliceCount: 1},
+						NodeName: new("node-c"),
+						Devices:  []resourcev1.Device{{Name: "gpu-0"}},
+					}},
+				},
+				NodePools: map[string]string{"node-a": "prefill", "node-b": "decode"},
+				AllocatedAt: map[types.UID]time.Time{
+					"prefill-0-gpu": start.Add(2 * time.Second),
+					"prefill-1-gpu": start,
+					"decode-0-gpu":  start.Add(time.Second),
+					"decode-1-gpu":  start.Add(3 * time.Second),
+				},
+			},
+			want: Observation{
+				Pods: []Pod{
+					{Name: "decode-0", Scheduling: Scheduled},
+					{Name: "decode-1", Scheduling: Scheduled},
+					{Name: "prefill-0", Scheduling: Scheduled},
+					{Name: "prefill-1", Scheduling: Scheduled},
+				},
+				Devices: []Device{
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0"}, NodeName: "node-a"},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-1"}, NodeName: "node-a"},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "node-b", Device: "gpu-0"}, NodeName: "node-b"},
+					{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "node-c", Device: "gpu-0"}, NodeName: "node-c"},
+				},
+				Pools: []Pool{
+					{Name: "decode", LastAllocation: start.Add(time.Second)},
+					{Name: "prefill", LastAllocation: start.Add(2 * time.Second)},
+				},
+			},
+		},
 	}
 
 	for name, tc := range cases {
@@ -177,7 +361,7 @@ func TestObserve(t *testing.T) {
 }
 
 func deepCopy(in Inputs) Inputs {
-	out := Inputs{}
+	out := Inputs{NodePools: maps.Clone(in.NodePools), AllocatedAt: maps.Clone(in.AllocatedAt)}
 	for i := range in.Pods {
 		out.Pods = append(out.Pods, *in.Pods[i].DeepCopy())
 	}

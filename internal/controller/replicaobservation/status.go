@@ -65,6 +65,9 @@ func Status(existing v1alpha1.ReplicaObservationStatus, generation int64, observ
 			UUID:     d.UUID,
 		})
 	}
+	for _, p := range observed.Pools {
+		status.Pools = append(status.Pools, v1alpha1.AllocatedPool{Name: p.Name, LastAllocationTime: metav1.NewMicroTime(p.LastAllocation)})
+	}
 
 	scheduled := Scheduled(observed)
 	scheduled.ObservedGeneration = generation
@@ -79,7 +82,7 @@ func Status(existing v1alpha1.ReplicaObservationStatus, generation int64, observ
 
 // FailedStatus returns the ReplicaObservation status that reports the replica
 // couldn't be observed, for the supplied reason. Its conditions become
-// Unknown, and it reports no pods or devices.
+// Unknown, and it reports no pods, devices or pools.
 func FailedStatus(existing v1alpha1.ReplicaObservationStatus, generation int64, reason string, err error) v1alpha1.ReplicaObservationStatus {
 	// Condition is a struct of values, so a shallow clone is a deep copy.
 	status := v1alpha1.ReplicaObservationStatus{
@@ -99,8 +102,9 @@ func FailedStatus(existing v1alpha1.ReplicaObservationStatus, generation int64, 
 }
 
 // Scheduled returns a replica's Scheduled condition. It's True when every pod
-// is bound to a node. Otherwise its reason names the first pod that isn't,
-// preferring one the scheduler couldn't place.
+// is bound to a node and the agent has seen each pod's claims allocated.
+// Otherwise its reason names the first pod that isn't, preferring one the
+// scheduler couldn't place.
 func Scheduled(observed replica.Observation) metav1.Condition {
 	cond := metav1.Condition{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionFalse}
 
@@ -126,6 +130,14 @@ func Scheduled(observed replica.Observation) metav1.Condition {
 		if m := observed.Pods[i].SchedulingMessage; m != "" {
 			cond.Message += ": " + m
 		}
+		return cond
+	}
+
+	// A pod is only bound once the scheduler has allocated its claims, but the
+	// agent's cache of claims can lag its cache of pods.
+	if i := slices.IndexFunc(observed.Pods, func(p replica.Pod) bool { return len(p.UnallocatedClaims) > 0 }); i >= 0 {
+		cond.Reason = v1alpha1.ReasonAllocationNotSeen
+		cond.Message = fmt.Sprintf("pod %s: ResourceClaim %s not yet seen allocated", observed.Pods[i].Name, observed.Pods[i].UnallocatedClaims[0])
 		return cond
 	}
 

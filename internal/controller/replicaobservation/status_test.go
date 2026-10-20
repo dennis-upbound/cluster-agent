@@ -37,6 +37,7 @@ var equateNow = cmpopts.EquateApproxTime(5 * time.Second)
 func TestStatus(t *testing.T) {
 	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	now := metav1.Now()
+	allocated := time.Date(2026, 10, 20, 10, 0, 0, 123456000, time.UTC)
 
 	type args struct {
 		existing   v1alpha1.ReplicaObservationStatus
@@ -50,7 +51,7 @@ func TestStatus(t *testing.T) {
 		want   v1alpha1.ReplicaObservationStatus
 	}{
 		"Serving": {
-			reason: "A replica whose pods are all scheduled and ready should report its pods, its devices, and conditions that transitioned now.",
+			reason: "A replica whose pods are all scheduled and ready should report its pods, its devices, the pools they're on, and conditions that transitioned now.",
 			args: args{
 				generation: 2,
 				o: replica.Observation{
@@ -62,6 +63,7 @@ func TestStatus(t *testing.T) {
 						{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0"}, NodeName: "node-a", UUID: "GPU-a"},
 						{ID: dra.DeviceID{Driver: "gpu.nvidia.com", Pool: "node-b", Device: "gpu-0"}, NodeName: "node-b"},
 					},
+					Pools: []replica.Pool{{Name: "gpu", LastAllocation: allocated}},
 				},
 			},
 			want: v1alpha1.ReplicaObservationStatus{
@@ -75,6 +77,7 @@ func TestStatus(t *testing.T) {
 					{Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0", NodeName: "node-a", UUID: "GPU-a"},
 					{Driver: "gpu.nvidia.com", Pool: "node-b", Device: "gpu-0", NodeName: "node-b"},
 				},
+				Pools: []v1alpha1.AllocatedPool{{Name: "gpu", LastAllocationTime: metav1.NewMicroTime(allocated)}},
 			},
 		},
 		"KeepsTransitionTime": {
@@ -134,7 +137,7 @@ func TestFailedStatus(t *testing.T) {
 		want   v1alpha1.ReplicaObservationStatus
 	}{
 		"Failed": {
-			reason: "A failed observation should make both conditions unknown for the supplied reason, and clear the observed pods and devices.",
+			reason: "A failed observation should make both conditions unknown for the supplied reason, and clear the observed pods, devices and pools.",
 			args: args{
 				existing: v1alpha1.ReplicaObservationStatus{
 					ObservedGeneration: 1,
@@ -144,6 +147,7 @@ func TestFailedStatus(t *testing.T) {
 					},
 					Pods:    v1alpha1.PodCounts{Total: 1, Scheduled: 1, Ready: 1},
 					Devices: []v1alpha1.AllocatedDevice{{Driver: "gpu.nvidia.com", Pool: "node-a", Device: "gpu-0"}},
+					Pools:   []v1alpha1.AllocatedPool{{Name: "gpu", LastAllocationTime: metav1.NewMicroTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))}},
 				},
 				generation: 2,
 				reason:     v1alpha1.ReasonInvalidPodSelector,
@@ -189,10 +193,10 @@ func TestScheduled(t *testing.T) {
 			want: metav1.Condition{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsScheduled},
 		},
 		"Unschedulable": {
-			reason: "An unschedulable pod should be reported ahead of one the scheduler hasn't tried yet.",
+			reason: "An unschedulable pod should be reported ahead of one the scheduler hasn't tried yet, and ahead of its own unallocated claims.",
 			o: replica.Observation{Pods: []replica.Pod{
 				{Name: "a", Scheduling: replica.Pending},
-				{Name: "b", Scheduling: replica.Unschedulable, SchedulingMessage: "0/4 nodes are available: 4 cannot allocate all claims."},
+				{Name: "b", Scheduling: replica.Unschedulable, SchedulingMessage: "0/4 nodes are available: 4 cannot allocate all claims.", UnallocatedClaims: []string{"b-gpu"}},
 			}},
 			want: metav1.Condition{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonUnschedulable, Message: "pod b: 0/4 nodes are available: 4 cannot allocate all claims."},
 		},
@@ -211,6 +215,14 @@ func TestScheduled(t *testing.T) {
 				{Name: "b", Scheduling: replica.Pending},
 			}},
 			want: metav1.Condition{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonSchedulingPending, Message: "pod b"},
+		},
+		"AllocationNotSeen": {
+			reason: "A bound pod whose claims the agent hasn't seen allocated means the replica isn't scheduled.",
+			o: replica.Observation{Pods: []replica.Pod{
+				{Name: "a", Scheduling: replica.Scheduled, UnallocatedClaims: []string{"a-gpu", "a-nic"}},
+				{Name: "b", Scheduling: replica.Scheduled},
+			}},
+			want: metav1.Condition{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonAllocationNotSeen, Message: "pod a: ResourceClaim a-gpu not yet seen allocated"},
 		},
 	}
 

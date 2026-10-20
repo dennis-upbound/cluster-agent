@@ -53,6 +53,7 @@ status:
   - freeDevices:
       gpu.nvidia.com: 1
     nodes: 1
+  lastAllocationTime: "2026-10-20T10:05:40.318204Z"
 ```
 
 The fleet scheduler uses `nodesByFreeDevices` to check whether a replica fits
@@ -102,7 +103,15 @@ status:
 `Scheduled` and `Ready` say why a replica isn't serving. A replica that doesn't
 fit might run on another cluster, but one that can't pull its image probably
 won't run anywhere. A scheduled replica also lists the DRA devices allocated to
-its pods, with each device's node and GPU UUID.
+its pods, with each device's node and GPU UUID, and the pools those nodes are
+in.
+
+The agent records when it first saw each ResourceClaim allocated. A pool and a
+replica each report the latest of those times for their claims on the pool as
+`lastAllocationTime`, though a pool's never goes back. A pool whose time is no
+earlier than a replica's time for it accounts for the replica's devices in
+`nodesByFreeDevices`, unless they've since been deallocated. The fleet scheduler
+then knows not to charge the pool for them again.
 
 ## Development
 

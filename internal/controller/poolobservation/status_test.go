@@ -42,6 +42,7 @@ var equateQuantities = cmp.Comparer(func(a, b resource.Quantity) bool { return a
 func TestStatus(t *testing.T) {
 	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	now := metav1.Now()
+	allocated := time.Date(2026, 10, 20, 10, 0, 0, 123456000, time.UTC)
 
 	type args struct {
 		existing   v1alpha1.PoolObservationStatus
@@ -77,6 +78,7 @@ func TestStatus(t *testing.T) {
 						"node-a": {"gpu.nvidia.com": 3},
 						"node-b": {"gpu.nvidia.com": 4},
 					},
+					LastAllocation:    allocated,
 					ExtendedResources: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")},
 					UnschedulablePods: []pool.UnschedulablePod{
 						{
@@ -110,7 +112,8 @@ func TestStatus(t *testing.T) {
 					{FreeDevices: map[string]int32{"gpu.nvidia.com": 3}, Nodes: 1},
 					{FreeDevices: map[string]int32{"gpu.nvidia.com": 4}, Nodes: 1},
 				},
-				ExtendedResources: map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
+				LastAllocationTime: new(metav1.NewMicroTime(allocated)),
+				ExtendedResources:  map[corev1.ResourceName]resource.Quantity{"nvidia.com/gpu": resource.MustParse("8")},
 			},
 		},
 		"KeepsTransitionTime": {
@@ -134,6 +137,31 @@ func TestStatus(t *testing.T) {
 					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 				},
 				Nodes: v1alpha1.NodeCounts{Total: 3, Ready: 1, Schedulable: 1},
+			},
+		},
+		"AllocationTimeNeverGoesBack": {
+			reason: "A pool whose latest claim was deallocated should keep the later allocation time it published.",
+			args: args{
+				existing: v1alpha1.PoolObservationStatus{
+					ObservedGeneration: 1,
+					Conditions: []metav1.Condition{
+						{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 1, LastTransitionTime: then},
+						{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
+					},
+					Nodes:              v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
+					LastAllocationTime: new(metav1.NewMicroTime(allocated.Add(24 * time.Hour))),
+				},
+				generation: 1,
+				observed:   pool.Observation{Nodes: pool.Nodes{Total: 1, Ready: 1, Schedulable: 1}, LastAllocation: allocated},
+			},
+			want: v1alpha1.PoolObservationStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 1, LastTransitionTime: then},
+					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
+				},
+				Nodes:              v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
+				LastAllocationTime: new(metav1.NewMicroTime(allocated.Add(24 * time.Hour))),
 			},
 		},
 		"Recovers": {
@@ -186,7 +214,7 @@ func TestFailedStatus(t *testing.T) {
 		want   v1alpha1.PoolObservationStatus
 	}{
 		"Failed": {
-			reason: "A failed observation should make both conditions unknown, and clear the observed nodes and devices.",
+			reason: "A failed observation should make both conditions unknown, and clear the observed nodes and devices, but keep the allocation time, which never goes back.",
 			args: args{
 				existing: v1alpha1.PoolObservationStatus{
 					ObservedGeneration: 1,
@@ -194,8 +222,9 @@ func TestFailedStatus(t *testing.T) {
 						{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 1, LastTransitionTime: then},
 						{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: then},
 					},
-					Nodes:   v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
-					Devices: []v1alpha1.DeviceClassStatus{{DeviceClassName: "gpu.nvidia.com", Nodes: 1, Allocatable: 4}},
+					Nodes:              v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
+					Devices:            []v1alpha1.DeviceClassStatus{{DeviceClassName: "gpu.nvidia.com", Nodes: 1, Allocatable: 4}},
+					LastAllocationTime: new(metav1.NewMicroTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))),
 				},
 				generation: 2,
 				err:        errors.New("boom"),
@@ -206,6 +235,7 @@ func TestFailedStatus(t *testing.T) {
 					{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", ObservedGeneration: 2, LastTransitionTime: now},
 					{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionUnknown, Reason: v1alpha1.ReasonObservationFailed, Message: "boom", ObservedGeneration: 2, LastTransitionTime: now},
 				},
+				LastAllocationTime: new(metav1.NewMicroTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))),
 			},
 		},
 	}

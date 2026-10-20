@@ -55,10 +55,10 @@ type ReplicaObservationStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	// Conditions of the replica. Scheduled is True when every pod is bound to
-	// a node, which means its ResourceClaims are allocated. Ready is True
-	// when every pod is ready, and otherwise its reason says what the replica
-	// is waiting on. Each condition's lastTransitionTime is when its status
-	// last changed.
+	// a node and the agent has seen each pod's ResourceClaims allocated. Ready
+	// is True when every pod is ready, and otherwise its reason says what the
+	// replica is waiting on. Each condition's lastTransitionTime is when its
+	// status last changed.
 	//
 	// +optional
 	// +listType=map
@@ -78,11 +78,23 @@ type ReplicaObservationStatus struct {
 	// +listMapKey=device
 	// +kubebuilder:validation:MaxItems=4096
 	Devices []AllocatedDevice `json:"devices,omitempty"`
+
+	// Pools are the pools whose nodes the replica's devices are attached to,
+	// with when the agent first saw the latest of the replica's ResourceClaims
+	// that hold devices on each allocated.
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=16
+	Pools []AllocatedPool `json:"pools,omitempty"`
 }
 
 // PodCounts counts a replica's pods.
 type PodCounts struct {
-	// Total counts every pod the replica's selector matches.
+	// Total counts the pods the replica's selector matches that haven't
+	// run to completion. A pod that has succeeded or failed, like an evicted
+	// one, doesn't count.
 	//
 	// +kubebuilder:validation:Minimum=0
 	Total int32 `json:"total"`
@@ -129,6 +141,22 @@ type AllocatedDevice struct {
 	// +optional
 	// +kubebuilder:validation:MaxLength=64
 	UUID string `json:"uuid,omitempty"`
+}
+
+// An AllocatedPool is a pool whose nodes some of a replica's devices are
+// attached to.
+type AllocatedPool struct {
+	// Name of the pool: its nodes' modelplane.ai/pool label.
+	//
+	// +kubebuilder:validation:MaxLength=63
+	Name string `json:"name"`
+
+	// LastAllocationTime is the latest time the agent first saw one of the
+	// replica's ResourceClaims that hold devices on the pool allocated. The
+	// pool's PoolObservation accounts for those devices once its own
+	// lastAllocationTime is no earlier than this, unless they've since been
+	// deallocated.
+	LastAllocationTime metav1.MicroTime `json:"lastAllocationTime"`
 }
 
 // ReplicaObservationList is a list of ReplicaObservations.

@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
+	"github.com/modelplaneai/cluster-agent/internal/allocation"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
 	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
@@ -74,6 +75,7 @@ func (fn PoolObserverFn) ObservePool(ctx context.Context, name string, in pool.I
 // PoolObservation.
 type Reconciler struct {
 	client   client.Client
+	record   *allocation.Record
 	observer PoolObserver
 	log      *slog.Logger
 }
@@ -93,10 +95,11 @@ func WithPoolObserver(o PoolObserver) ReconcilerOption {
 }
 
 // NewReconciler returns a Reconciler that reads and writes through the
-// supplied client.
-func NewReconciler(c client.Client, opts ...ReconcilerOption) *Reconciler {
+// supplied client, and reads ResourceClaims through the supplied Record.
+func NewReconciler(c client.Client, record *allocation.Record, opts ...ReconcilerOption) *Reconciler {
 	r := &Reconciler{
 		client:   c,
+		record:   record,
 		observer: pool.NewObserver(),
 		log:      slog.New(slog.DiscardHandler),
 	}
@@ -109,8 +112,8 @@ func NewReconciler(c client.Client, opts ...ReconcilerOption) *Reconciler {
 // Setup adds a PoolObservation controller to the manager. The controller
 // observes every pool whenever an object it reads changes, but waits for the
 // supplied delay first, so that a burst of changes produces one observation
-// of each pool.
-func Setup(mgr ctrl.Manager, log *slog.Logger, delay time.Duration) error {
+// of each pool. It reads ResourceClaims through the supplied Record.
+func Setup(mgr ctrl.Manager, record *allocation.Record, log *slog.Logger, delay time.Duration) error {
 	c := mgr.GetClient()
 	enqueue := EnqueueAllAfter(c, delay)
 	err := ctrl.NewControllerManagedBy(mgr).
@@ -122,7 +125,7 @@ func Setup(mgr ctrl.Manager, log *slog.Logger, delay time.Duration) error {
 		Watches(&resourcev1.ResourceClaim{}, enqueue).
 		Watches(&corev1.Pod{}, enqueue).
 		Watches(&corev1.Event{}, enqueue).
-		Complete(NewReconciler(c, WithLogger(log.With("controller", "poolobservation"))))
+		Complete(NewReconciler(c, record, WithLogger(log.With("controller", "poolobservation"))))
 	if err != nil {
 		return fmt.Errorf("cannot create controller: %w", err)
 	}
@@ -186,8 +189,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot list DeviceClasses: %w", err)
 	}
 	claims := &resourcev1.ResourceClaimList{}
-	if err := r.client.List(ctx, claims, client.UnsafeDisableDeepCopy); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list ResourceClaims: %w", err)
+	allocatedAt, err := r.record.Read(func() ([]resourcev1.ResourceClaim, error) {
+		if err := r.client.List(ctx, claims, client.UnsafeDisableDeepCopy); err != nil {
+			return nil, fmt.Errorf("cannot list ResourceClaims: %w", err)
+		}
+		return claims.Items, nil
+	})
+	if err != nil {
+		return reconcile.Result{}, err //nolint:wrapcheck // Read returns the error the read function wrapped.
 	}
 	pods := &corev1.PodList{}
 	if err := r.client.List(ctx, pods, client.HasLabels{replica.LabelReplica}, client.UnsafeDisableDeepCopy); err != nil {
@@ -205,6 +214,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		Claims:  claims.Items,
 		Pods:    pods.Items,
 		Events:  events.Items,
+
+		AllocatedAt: allocatedAt,
 	})
 	if err != nil {
 		// Observing the same objects again would fail again. A change to

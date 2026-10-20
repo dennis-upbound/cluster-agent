@@ -28,7 +28,8 @@ const (
 	// nodes to a pool for its unschedulable pods.
 	TypeScaleUpBlocked = "ScaleUpBlocked"
 
-	// TypeScheduled reports whether a replica's pods are bound to nodes.
+	// TypeScheduled reports whether a replica's pods are bound to nodes, with
+	// their ResourceClaims allocated.
 	TypeScheduled = "Scheduled"
 )
 
@@ -60,6 +61,7 @@ const (
 	ReasonUnschedulable        = "Unschedulable"
 	ReasonSchedulingGated      = "SchedulingGated"
 	ReasonSchedulingPending    = "SchedulingPending"
+	ReasonAllocationNotSeen    = "AllocationNotSeen"
 	ReasonPodsReady            = "PodsReady"
 	ReasonNotScheduled         = "NotScheduled"
 	ReasonImagePullBackOff     = "ImagePullBackOff"

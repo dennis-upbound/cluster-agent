@@ -49,6 +49,14 @@ func Status(existing v1alpha1.PoolObservationStatus, generation int64, observed 
 	for _, d := range observed.Devices {
 		status.Devices = append(status.Devices, DeviceClassStatus(d))
 	}
+	// The time never goes back, even when the claim it came from is
+	// deallocated. After a restart the agent assigns times later than those
+	// published, and a time that went back could let it assign a new claim a
+	// time no later than one a reader still holds.
+	status.LastAllocationTime = existing.LastAllocationTime
+	if t := observed.LastAllocation; !t.IsZero() && (status.LastAllocationTime == nil || t.After(status.LastAllocationTime.Time)) {
+		status.LastAllocationTime = new(metav1.NewMicroTime(t))
+	}
 
 	healthy := Healthy(observed)
 	healthy.ObservedGeneration = generation
@@ -63,12 +71,14 @@ func Status(existing v1alpha1.PoolObservationStatus, generation int64, observed 
 
 // FailedStatus returns the PoolObservation status that reports the pool
 // couldn't be observed. Its conditions become Unknown, and it reports no
-// nodes or devices.
+// nodes or devices. It keeps the existing allocation time, which never goes
+// back.
 func FailedStatus(existing v1alpha1.PoolObservationStatus, generation int64, err error) v1alpha1.PoolObservationStatus {
 	// Condition is a struct of values, so a shallow clone is a deep copy.
 	status := v1alpha1.PoolObservationStatus{
 		ObservedGeneration: generation,
 		Conditions:         slices.Clone(existing.Conditions),
+		LastAllocationTime: existing.LastAllocationTime,
 	}
 	for _, t := range []string{v1alpha1.TypeHealthy, v1alpha1.TypeScaleUpBlocked} {
 		meta.SetStatusCondition(&status.Conditions, metav1.Condition{

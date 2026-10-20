@@ -18,6 +18,7 @@ package pool
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,9 +65,18 @@ var l4Attributes = map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
 }
 
 func TestObservePool(t *testing.T) {
-	full := inputs(t, filepath.Join("testdata", "full"))
-	partial := inputs(t, filepath.Join("testdata", "partial"))
-	cordoned := inputs(t, filepath.Join("testdata", "cordoned"))
+	start := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
+
+	// When the agent first saw each of the snapshots' allocated claims. Only
+	// full has one-gpu-57bf7796f9-fm9sv's claim, and it's the latest.
+	allocatedAt := map[types.UID]time.Time{
+		"d18cf08e-3135-4b08-acf0-0db06605d2eb": start,                      // one-gpu-57bf7796f9-f6vrt
+		"bd5b9231-19f7-4ebb-92c9-6a9a990e8c89": start.Add(time.Second),     // two-gpu-7f7ff797d7-vs2w9
+		"d7eb8674-255e-4916-8445-502e13cd1879": start.Add(2 * time.Second), // one-gpu-57bf7796f9-fm9sv
+	}
+	full := inputs(t, filepath.Join("testdata", "full"), allocatedAt)
+	partial := inputs(t, filepath.Join("testdata", "partial"), allocatedAt)
+	cordoned := inputs(t, filepath.Join("testdata", "cordoned"), allocatedAt)
 
 	type args struct {
 		pool string
@@ -79,7 +89,7 @@ func TestObservePool(t *testing.T) {
 		want   Observation
 	}{
 		"Full": {
-			reason: "Every GPU on the node is allocated.",
+			reason: "Every GPU on the node is allocated, the latest to a claim first seen allocated two seconds in.",
 			args:   args{pool: "gpu-l4x4-a", in: full},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
@@ -91,7 +101,8 @@ func TestObservePool(t *testing.T) {
 						Attributes:      l4Attributes,
 					},
 				},
-				Free: map[string]FreeDevices{"ip-10-0-54-161.ec2.internal": {"gpu.nvidia.com": 0}},
+				Free:           map[string]FreeDevices{"ip-10-0-54-161.ec2.internal": {"gpu.nvidia.com": 0}},
+				LastAllocation: start.Add(2 * time.Second),
 				UnschedulablePods: []UnschedulablePod{
 					{
 						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -102,7 +113,7 @@ func TestObservePool(t *testing.T) {
 			},
 		},
 		"Partial": {
-			reason: "A node with one GPU free should report it.",
+			reason: "A node with one GPU free should report it. The latest allocation should be the latest of the claims read.",
 			args:   args{pool: "gpu-l4x4-a", in: partial},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Schedulable: 1},
@@ -114,7 +125,8 @@ func TestObservePool(t *testing.T) {
 						Attributes:      l4Attributes,
 					},
 				},
-				Free: map[string]FreeDevices{"ip-10-0-54-161.ec2.internal": {"gpu.nvidia.com": 1}},
+				Free:           map[string]FreeDevices{"ip-10-0-54-161.ec2.internal": {"gpu.nvidia.com": 1}},
+				LastAllocation: start.Add(time.Second),
 				UnschedulablePods: []UnschedulablePod{
 					{
 						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -125,7 +137,7 @@ func TestObservePool(t *testing.T) {
 			},
 		},
 		"Cordoned": {
-			reason: "A cordoned node's devices should count toward the nodes that publish them, but not toward what's allocatable.",
+			reason: "A cordoned node's devices should count toward the nodes that publish them, but not toward what's allocatable. Claims on it still count toward the latest allocation.",
 			args:   args{pool: "gpu-l4x4-a", in: cordoned},
 			want: Observation{
 				Nodes: Nodes{Total: 1, Ready: 1, Cordoned: 1, Schedulable: 0},
@@ -136,6 +148,7 @@ func TestObservePool(t *testing.T) {
 						Attributes:      l4Attributes,
 					},
 				},
+				LastAllocation: start.Add(time.Second),
 				UnschedulablePods: []UnschedulablePod{
 					{
 						NamespacedName: types.NamespacedName{Namespace: "ml-test", Name: "too-big-5859cf75cf-jzm8n"},
@@ -368,20 +381,21 @@ func TestEventTime(t *testing.T) {
 	}
 }
 
-func inputs(t *testing.T, dir string) Inputs {
+func inputs(t *testing.T, dir string, allocatedAt map[types.UID]time.Time) Inputs {
 	t.Helper()
 	return Inputs{
-		Nodes:   load[corev1.NodeList](t, filepath.Join(dir, "nodes.json")).Items,
-		Slices:  load[resourcev1.ResourceSliceList](t, filepath.Join(dir, "slices.json")).Items,
-		Classes: load[resourcev1.DeviceClassList](t, filepath.Join(dir, "classes.json")).Items,
-		Claims:  load[resourcev1.ResourceClaimList](t, filepath.Join(dir, "claims.json")).Items,
-		Pods:    load[corev1.PodList](t, filepath.Join(dir, "pods.json")).Items,
-		Events:  load[corev1.EventList](t, filepath.Join(dir, "events.json")).Items,
+		AllocatedAt: allocatedAt,
+		Nodes:       load[corev1.NodeList](t, filepath.Join(dir, "nodes.json")).Items,
+		Slices:      load[resourcev1.ResourceSliceList](t, filepath.Join(dir, "slices.json")).Items,
+		Classes:     load[resourcev1.DeviceClassList](t, filepath.Join(dir, "classes.json")).Items,
+		Claims:      load[resourcev1.ResourceClaimList](t, filepath.Join(dir, "claims.json")).Items,
+		Pods:        load[corev1.PodList](t, filepath.Join(dir, "pods.json")).Items,
+		Events:      load[corev1.EventList](t, filepath.Join(dir, "events.json")).Items,
 	}
 }
 
 func deepCopy(in Inputs) Inputs {
-	out := Inputs{}
+	out := Inputs{AllocatedAt: maps.Clone(in.AllocatedAt)}
 	for i := range in.Nodes {
 		out.Nodes = append(out.Nodes, *in.Nodes[i].DeepCopy())
 	}

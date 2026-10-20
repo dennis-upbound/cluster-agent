@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
+	"github.com/modelplaneai/cluster-agent/internal/allocation"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
 	"github.com/modelplaneai/cluster-agent/internal/replica"
 )
@@ -59,6 +60,7 @@ var ignoreResourceVersion = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceV
 func TestReconcile(t *testing.T) {
 	then := metav1.NewTime(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	now := metav1.Now()
+	allocated := time.Date(2026, 9, 1, 0, 0, 0, 123456000, time.UTC)
 
 	// The PoolObservation's name differs from its pool's, so the reconciler
 	// can't confuse the two.
@@ -128,6 +130,24 @@ func TestReconcile(t *testing.T) {
 				status: &v1alpha1.PoolObservationStatus{},
 			},
 		},
+		"ListClaimsError": {
+			reason: "An error listing ResourceClaims through the Record should be returned, without changing the status.",
+			params: params{
+				objects: []client.Object{&v1alpha1.PoolObservation{ObjectMeta: meta, Spec: spec}},
+				interceptor: interceptor.Funcs{
+					List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						if _, ok := list.(*resourcev1.ResourceClaimList); ok {
+							return errBoom
+						}
+						return c.List(ctx, list, opts...)
+					},
+				},
+			},
+			want: want{
+				err:    cmpopts.AnyError,
+				status: &v1alpha1.PoolObservationStatus{},
+			},
+		},
 		"ObserveError": {
 			reason: "A failed observation should be reported as unknown conditions, with no nodes or devices, rather than retried.",
 			params: params{
@@ -159,7 +179,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		"ReadsPool": {
-			reason: "The pool the spec names should be observed, from its nodes, the pods of replicas, and every ResourceSlice, DeviceClass, ResourceClaim and event.",
+			reason: "The pool the spec names should be observed, from its nodes, the pods of replicas, every ResourceSlice, DeviceClass, ResourceClaim and event, and when each claim was first seen allocated.",
 			params: params{
 				objects: []client.Object{
 					&v1alpha1.PoolObservation{ObjectMeta: meta, Spec: spec},
@@ -170,7 +190,11 @@ func TestReconcile(t *testing.T) {
 					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "coredns-0"}},
 					&resourcev1.ResourceSlice{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0-gpu"}},
 					&resourcev1.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "gpu.nvidia.com"}},
-					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}},
+					&resourcev1.ResourceClaim{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu", UID: "llama-0-gpu"},
+						Status:     resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{}},
+					},
+					&resourcev1.ResourceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0-gpu", UID: "qwen-0-gpu"}},
 					&corev1.Event{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0.scale-up"}},
 				},
 			},
@@ -181,9 +205,16 @@ func TestReconcile(t *testing.T) {
 						Nodes:   []corev1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0", Labels: map[string]string{pool.LabelPool: "gpu"}}}},
 						Slices:  []resourcev1.ResourceSlice{{ObjectMeta: metav1.ObjectMeta{Name: "gpu-0-gpu"}}},
 						Classes: []resourcev1.DeviceClass{{ObjectMeta: metav1.ObjectMeta{Name: "gpu.nvidia.com"}}},
-						Claims:  []resourcev1.ResourceClaim{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu"}}},
-						Pods:    []corev1.Pod{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}}},
-						Events:  []corev1.Event{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0.scale-up"}}},
+						Claims: []resourcev1.ResourceClaim{
+							{
+								ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0-gpu", UID: "llama-0-gpu"},
+								Status:     resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{}},
+							},
+							{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "qwen-0-gpu", UID: "qwen-0-gpu"}},
+						},
+						Pods:        []corev1.Pod{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0", Labels: map[string]string{replica.LabelReplica: "llama"}}}},
+						Events:      []corev1.Event{{ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0.scale-up"}}},
+						AllocatedAt: map[types.UID]time.Time{"llama-0-gpu": allocated},
 					},
 				},
 				status: &v1alpha1.PoolObservationStatus{
@@ -199,7 +230,7 @@ func TestReconcile(t *testing.T) {
 			reason: "The observed pool should be applied to the PoolObservation's status.",
 			params: params{
 				objects:     []client.Object{&v1alpha1.PoolObservation{ObjectMeta: meta, Spec: spec}},
-				observation: pool.Observation{Nodes: pool.Nodes{Total: 1, Ready: 1, Schedulable: 1}},
+				observation: pool.Observation{Nodes: pool.Nodes{Total: 1, Ready: 1, Schedulable: 1}, LastAllocation: allocated},
 			},
 			want: want{
 				observed: observed{Pool: "gpu"},
@@ -209,7 +240,8 @@ func TestReconcile(t *testing.T) {
 						{Type: v1alpha1.TypeHealthy, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPoolHealthy, ObservedGeneration: 1, LastTransitionTime: now},
 						{Type: v1alpha1.TypeScaleUpBlocked, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonNoUnschedulablePods, ObservedGeneration: 1, LastTransitionTime: now},
 					},
-					Nodes: v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
+					Nodes:              v1alpha1.NodeCounts{Total: 1, Ready: 1, Schedulable: 1},
+					LastAllocationTime: new(metav1.NewMicroTime(allocated)),
 				},
 			},
 		},
@@ -303,7 +335,8 @@ func TestReconcile(t *testing.T) {
 				WithInterceptorFuncs(tc.params.interceptor).
 				Build()
 			gotObserved := observed{}
-			r := NewReconciler(c, WithPoolObserver(PoolObserverFn(func(_ context.Context, name string, in pool.Inputs) (pool.Observation, error) {
+			record := allocation.NewRecord(time.Time{}, allocation.WithClock(func() time.Time { return allocated }))
+			r := NewReconciler(c, record, WithPoolObserver(PoolObserverFn(func(_ context.Context, name string, in pool.Inputs) (pool.Observation, error) {
 				gotObserved = observed{Pool: name, Inputs: in}
 				return tc.params.observation, tc.params.observeErr
 			})))

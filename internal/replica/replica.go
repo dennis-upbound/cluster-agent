@@ -22,9 +22,11 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/modelplaneai/cluster-agent/internal/dra"
 )
@@ -45,15 +47,36 @@ type Inputs struct {
 	// Slices are ResourceSlices. Only those of the DRA pools the claims
 	// allocated devices from are observed.
 	Slices []resourcev1.ResourceSlice
+
+	// NodePools is the pool each node belongs to, keyed by node name.
+	NodePools map[string]string
+
+	// AllocatedAt is when the agent first saw each allocated claim, keyed by
+	// the claim's UID.
+	AllocatedAt map[types.UID]time.Time
 }
 
 // An Observation is what's true of a replica.
 type Observation struct {
-	// Pods are the replica's pods, sorted by name.
+	// Pods are the replica's pods that haven't run to completion, sorted by
+	// name.
 	Pods []Pod
 
 	// Devices are the devices allocated to the replica's pods, sorted.
 	Devices []Device
+
+	// Pools are the pools whose nodes the devices are attached to, sorted by
+	// name.
+	Pools []Pool
+}
+
+// A Pool is a pool whose nodes some of a replica's devices are attached to.
+type Pool struct {
+	Name string
+
+	// LastAllocation is the latest time the agent first saw one of the
+	// replica's claims that hold devices on the pool allocated.
+	LastAllocation time.Time
 }
 
 // Scheduling is how far the scheduler got placing a pod.
@@ -91,6 +114,11 @@ type Pod struct {
 	// Waiting are the pod's containers that are waiting to run, init
 	// containers first.
 	Waiting []Waiting
+
+	// UnallocatedClaims are the names of the ResourceClaims the pod uses that
+	// the agent hasn't seen allocated, because they aren't allocated or it
+	// can't find them.
+	UnallocatedClaims []string
 }
 
 // Waiting is a container that's waiting to run.
@@ -113,50 +141,71 @@ type Device struct {
 }
 
 // Observe returns what's true of the replica the supplied objects describe.
-func Observe(in Inputs) Observation {
-	claims := make(map[string]*resourcev1.ResourceClaim, len(in.Claims))
-	for i := range in.Claims {
-		claims[in.Claims[i].Namespace+"/"+in.Claims[i].Name] = &in.Claims[i]
+func Observe(inputs Inputs) Observation {
+	claims := make(map[string]*resourcev1.ResourceClaim, len(inputs.Claims))
+	for i := range inputs.Claims {
+		claims[inputs.Claims[i].Namespace+"/"+inputs.Claims[i].Name] = &inputs.Claims[i]
 	}
 
 	observation := Observation{}
-	allocated := map[dra.DeviceID]bool{}
-	for _, p := range in.Pods {
-		observation.Pods = append(observation.Pods, ObservePod(p))
-		for _, name := range ClaimNames(p) {
-			if c, ok := claims[p.Namespace+"/"+name]; ok {
-				for _, id := range dra.Allocations(c) {
-					allocated[id] = true
-				}
-			}
+	// Several pods can share a claim.
+	allocated := map[*resourcev1.ResourceClaim]bool{}
+	for _, p := range inputs.Pods {
+		if Finished(p) {
+			continue
 		}
+		pod := ObservePod(p)
+		for _, name := range ClaimNames(p) {
+			c, ok := claims[p.Namespace+"/"+name]
+			if !ok || c.Status.Allocation == nil {
+				pod.UnallocatedClaims = append(pod.UnallocatedClaims, name)
+				continue
+			}
+			allocated[c] = true
+		}
+		observation.Pods = append(observation.Pods, pod)
 	}
 
 	// A replica's devices come from a few of the cluster's DRA pools, so only
 	// index the devices those pools publish.
 	type driverPool struct{ driver, pool string }
-	pools := map[driverPool]bool{}
-	for id := range allocated {
-		pools[driverPool{driver: id.Driver, pool: id.Pool}] = true
+	draPools := map[driverPool]bool{}
+	for c := range allocated {
+		for _, id := range dra.Allocations(c) {
+			draPools[driverPool{driver: id.Driver, pool: id.Pool}] = true
+		}
 	}
 	var published []resourcev1.ResourceSlice
-	for _, s := range in.Slices {
-		if pools[driverPool{driver: s.Spec.Driver, pool: s.Spec.Pool.Name}] {
+	for _, s := range inputs.Slices {
+		if draPools[driverPool{driver: s.Spec.Driver, pool: s.Spec.Pool.Name}] {
 			published = append(published, s)
 		}
 	}
 	devices := dra.Devices(published)
 
-	for id := range allocated {
-		d := Device{ID: id}
-		if pd, ok := devices[id]; ok {
-			d.NodeName = pd.NodeName
+	seen := map[dra.DeviceID]bool{}
+	latest := map[string]time.Time{}
+	for c := range allocated {
+		for _, id := range dra.Allocations(c) {
+			pd := devices[id]
+			if pool, ok := inputs.NodePools[pd.NodeName]; ok && inputs.AllocatedAt[c.UID].After(latest[pool]) {
+				latest[pool] = inputs.AllocatedAt[c.UID]
+			}
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			d := Device{ID: id, NodeName: pd.NodeName}
 			d.UUID, _ = pd.StringAttribute("uuid")
+			observation.Devices = append(observation.Devices, d)
 		}
-		observation.Devices = append(observation.Devices, d)
+	}
+	for name, t := range latest {
+		observation.Pools = append(observation.Pools, Pool{Name: name, LastAllocation: t})
 	}
 
 	slices.SortFunc(observation.Pods, func(a, b Pod) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(observation.Pools, func(a, b Pool) int { return strings.Compare(a.Name, b.Name) })
 	slices.SortFunc(observation.Devices, func(a, b Device) int {
 		return cmp.Or(
 			strings.Compare(a.ID.Driver, b.ID.Driver),
@@ -165,6 +214,13 @@ func Observe(in Inputs) Observation {
 		)
 	})
 	return observation
+}
+
+// Finished returns true if the pod has run to completion, like an evicted pod.
+// A finished pod holds no devices, and its controller replaces it, so it's no
+// longer one of its replica's pods.
+func Finished(p corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed
 }
 
 // ObservePod returns what's true of a pod.

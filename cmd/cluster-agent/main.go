@@ -26,6 +26,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,6 +39,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/modelplaneai/cluster-agent/apis/v1alpha1"
+	"github.com/modelplaneai/cluster-agent/internal/allocation"
 	"github.com/modelplaneai/cluster-agent/internal/controller/poolobservation"
 	"github.com/modelplaneai/cluster-agent/internal/controller/replicaobservation"
 	"github.com/modelplaneai/cluster-agent/internal/pool"
@@ -85,10 +87,25 @@ func main() {
 	kctx.FatalIfErrorf(mgr.AddHealthzCheck("ping", healthz.Ping), "cannot add health check")
 	kctx.FatalIfErrorf(mgr.AddReadyzCheck("ping", healthz.Ping), "cannot add ready check")
 
-	kctx.FatalIfErrorf(poolobservation.Setup(mgr, log, flags.ObservationDelay), "cannot set up PoolObservation controller")
-	kctx.FatalIfErrorf(replicaobservation.Setup(mgr, log), "cannot set up ReplicaObservation controller")
+	ctx := ctrl.SetupSignalHandler()
 
-	kctx.FatalIfErrorf(mgr.Start(ctrl.SetupSignalHandler()), "cannot run manager")
+	// The cache isn't running yet, so read what's published straight from the
+	// API server.
+	pos := &v1alpha1.PoolObservationList{}
+	kctx.FatalIfErrorf(mgr.GetAPIReader().List(ctx, pos), "cannot list PoolObservations")
+	ros := &v1alpha1.ReplicaObservationList{}
+	kctx.FatalIfErrorf(mgr.GetAPIReader().List(ctx, ros), "cannot list ReplicaObservations")
+	record := allocation.NewRecord(allocation.LatestPublished(pos.Items, ros.Items))
+
+	claims, err := mgr.GetCache().GetInformer(ctx, &resourcev1.ResourceClaim{})
+	kctx.FatalIfErrorf(err, "cannot get ResourceClaim informer")
+	_, err = claims.AddEventHandler(allocation.ForgetDeleted(record))
+	kctx.FatalIfErrorf(err, "cannot add ResourceClaim event handler")
+
+	kctx.FatalIfErrorf(poolobservation.Setup(mgr, record, log, flags.ObservationDelay), "cannot set up PoolObservation controller")
+	kctx.FatalIfErrorf(replicaobservation.Setup(mgr, record, log), "cannot set up ReplicaObservation controller")
+
+	kctx.FatalIfErrorf(mgr.Start(ctx), "cannot run manager")
 }
 
 // CacheOptions returns options that keep the agent's cache to the objects it
