@@ -112,10 +112,10 @@ spec:
               conditions:
                 description: |-
                   Conditions of the replica. Scheduled is True when every pod is bound to
-                  a node, which means its ResourceClaims are allocated. Ready is True
-                  when every pod is ready, and otherwise its reason says what the replica
-                  is waiting on. Each condition's lastTransitionTime is when its status
-                  last changed.
+                  a node and the agent has seen each pod's ResourceClaims allocated. Ready
+                  is True when every pod is ready, and otherwise its reason says what the
+                  replica is waiting on. Each condition's lastTransitionTime is when its
+                  status last changed.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -239,7 +239,10 @@ spec:
                     minimum: 0
                     type: integer
                   total:
-                    description: Total counts every pod the replica's selector matches.
+                    description: |-
+                      Total counts the pods the replica's selector matches that haven't
+                      run to completion. A pod that has succeeded or failed, like an evicted
+                      one, doesn't count.
                     format: int32
                     minimum: 0
                     type: integer
@@ -248,6 +251,39 @@ spec:
                 - scheduled
                 - total
                 type: object
+              pools:
+                description: |-
+                  Pools are the pools whose nodes the replica's devices are attached to,
+                  with when the agent first saw the latest of the replica's ResourceClaims
+                  that hold devices on each allocated.
+                items:
+                  description: |-
+                    An AllocatedPool is a pool whose nodes some of a replica's devices are
+                    attached to.
+                  properties:
+                    lastAllocationTime:
+                      description: |-
+                        LastAllocationTime is the latest time the agent first saw one of the
+                        replica's ResourceClaims that hold devices on the pool allocated. The
+                        pool's PoolObservation accounts for those devices once its own
+                        lastAllocationTime is no earlier than this, unless they've since been
+                        deallocated.
+                      format: date-time
+                      type: string
+                    name:
+                      description: 'Name of the pool: its nodes'' modelplane.ai/pool
+                        label.'
+                      maxLength: 63
+                      type: string
+                  required:
+                  - lastAllocationTime
+                  - name
+                  type: object
+                maxItems: 16
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
             required:
             - pods
             type: object
