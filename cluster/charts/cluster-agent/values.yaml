@@ -23,3 +23,10 @@ resources:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+crds:
+  # Install and upgrade the agent's CRDs.
+  enabled: true
+  # Keep the CRDs when the chart is uninstalled. Modelplane can only delete the
+  # observations it created while the cluster still serves their kinds.
+  keep: true

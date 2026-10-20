@@ -43,7 +43,7 @@
       # Regenerates deepcopy methods, CRDs and RBAC from the Go source.
       generate = ''
         controller-gen object:headerFile=hack/boilerplate.go.txt paths=./apis/...
-        controller-gen crd paths=./apis/... output:crd:artifacts:config=cluster/charts/cluster-agent/crds
+        controller-gen crd paths=./apis/... output:crd:artifacts:config=cluster/charts/cluster-agent/files/crds
         controller-gen rbac:roleName=cluster-agent paths=./internal/... output:rbac:artifacts:config=cluster/charts/cluster-agent/templates
       '';
 
