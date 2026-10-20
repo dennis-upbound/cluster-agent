@@ -1,0 +1,23 @@
+{{- /*
+GKE only admits pods of the system priority classes in a namespace whose
+ResourceQuota permits them. The quota only grants headroom, so it's harmless
+where they aren't restricted.
+*/ -}}
+{{- if has .Values.priorityClassName (list "system-cluster-critical" "system-node-critical") }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: cluster-agent-critical-pods
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster-agent.labels" . | nindent 4 }}
+spec:
+  hard:
+    pods: "1000"
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values:
+      - {{ .Values.priorityClassName }}
+{{- end }}

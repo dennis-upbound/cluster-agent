@@ -14,11 +14,16 @@ debug: false
 observationDelay: 10s
 
 # The agent caches the nodes, pods and ResourceSlices it observes, so its
-# memory grows with the cluster. There's no limit by default.
+# memory grows with the cluster. It uses about 50Mi on a cluster with nothing
+# to observe. There's no limit by default.
 resources:
   requests:
     cpu: 50m
-    memory: 64Mi
+    memory: 128Mi
+
+# The agent's priority. By default it can preempt other pods, so it runs on a
+# cluster that's full.
+priorityClassName: system-cluster-critical
 
 nodeSelector: {}
 tolerations: []
