@@ -38,7 +38,8 @@ status:
   nodes:
     total: 1
     ready: 1
-    schedulable: 1            # Ready and not cordoned.
+    schedulable: 1            # Ready, not cordoned, and not tainted against
+                              # Modelplane's GPU pods.
   unschedulablePods: 1        # Pinned pods the scheduler can't place.
   devices:
   - deviceClassName: gpu.nvidia.com

@@ -139,7 +139,9 @@ type NodeCounts struct {
 	// +kubebuilder:validation:Minimum=0
 	Ready int32 `json:"ready"`
 
-	// Schedulable counts the ready nodes that aren't cordoned.
+	// Schedulable counts the ready nodes that aren't cordoned, and carry no
+	// NoSchedule or NoExecute taint but nvidia.com/gpu with NoSchedule, which
+	// Modelplane's GPU pods tolerate.
 	//
 	// +kubebuilder:validation:Minimum=0
 	Schedulable int32 `json:"schedulable"`

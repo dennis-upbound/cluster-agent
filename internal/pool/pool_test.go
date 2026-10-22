@@ -449,6 +449,35 @@ func TestCountNodes(t *testing.T) {
 			},
 			want: Nodes{Total: 4, Ready: 2, Cordoned: 2, Schedulable: 1},
 		},
+		"Taints": {
+			reason: "A ready node should be schedulable only if Modelplane's GPU pods tolerate every NoSchedule and NoExecute taint it carries.",
+			nodes: []corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "gpu-taint"},
+					Spec:       corev1.NodeSpec{Taints: []corev1.Taint{{Key: "nvidia.com/gpu", Value: "true", Effect: corev1.TaintEffectNoSchedule}}},
+					Status:     ready,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "prefer-no-schedule"},
+					Spec:       corev1.NodeSpec{Taints: []corev1.Taint{{Key: "DeletionCandidateOfClusterAutoscaler", Effect: corev1.TaintEffectPreferNoSchedule}}},
+					Status:     ready,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "being-removed"},
+					Spec: corev1.NodeSpec{Taints: []corev1.Taint{
+						{Key: "nvidia.com/gpu", Value: "true", Effect: corev1.TaintEffectNoSchedule},
+						{Key: "ToBeDeletedByClusterAutoscaler", Effect: corev1.TaintEffectNoSchedule},
+					}},
+					Status: ready,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "gpu-no-execute"},
+					Spec:       corev1.NodeSpec{Taints: []corev1.Taint{{Key: "nvidia.com/gpu", Effect: corev1.TaintEffectNoExecute}}},
+					Status:     ready,
+				},
+			},
+			want: Nodes{Total: 4, Ready: 4, Schedulable: 2},
+		},
 	}
 
 	for name, tc := range cases {

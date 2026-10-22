@@ -40,6 +40,10 @@ import (
 // Modelplane pins a pod to a pool with a node selector on it.
 const LabelPool = "modelplane.ai/pool"
 
+// TaintGPU is the taint Modelplane puts on the GPU pools it provisions. Its GPU
+// pods tolerate it with effect NoSchedule.
+const TaintGPU = "nvidia.com/gpu"
+
 // Cluster autoscaler pod event reasons. See
 // https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-events-are-emitted-by-ca
 const (
@@ -107,7 +111,8 @@ type Nodes struct {
 	// Cordoned counts the nodes marked unschedulable, ready or not.
 	Cordoned int32
 
-	// Schedulable counts the ready nodes that aren't cordoned.
+	// Schedulable counts the nodes Modelplane's GPU pods can schedule onto.
+	// See IsSchedulable.
 	Schedulable int32
 }
 
@@ -174,8 +179,8 @@ type Membership struct {
 	// Nodes is the set of the pool's nodes.
 	Nodes map[string]bool
 
-	// Schedulable is the set of the pool's nodes that are ready and not
-	// cordoned.
+	// Schedulable is the set of the pool's nodes that Modelplane's GPU pods
+	// can schedule onto. See IsSchedulable.
 	Schedulable map[string]bool
 }
 
@@ -227,7 +232,7 @@ func Members(nodes []corev1.Node) Membership {
 	m := Membership{Nodes: map[string]bool{}, Schedulable: map[string]bool{}}
 	for _, n := range nodes {
 		m.Nodes[n.Name] = true
-		if IsReady(n) && !n.Spec.Unschedulable {
+		if IsSchedulable(n) {
 			m.Schedulable[n.Name] = true
 		}
 	}
@@ -244,9 +249,9 @@ func CountNodes(nodes []corev1.Node) Nodes {
 		}
 		if IsReady(n) {
 			c.Ready++
-			if !n.Spec.Unschedulable {
-				c.Schedulable++
-			}
+		}
+		if IsSchedulable(n) {
+			c.Schedulable++
 		}
 	}
 	return c
@@ -446,6 +451,28 @@ func IsReady(n corev1.Node) bool {
 		}
 	}
 	return false
+}
+
+// IsSchedulable returns true if Modelplane's GPU pods can schedule onto the
+// node: it's ready, it isn't cordoned, and every NoSchedule or NoExecute taint
+// it carries is one they tolerate.
+func IsSchedulable(n corev1.Node) bool {
+	if !IsReady(n) || n.Spec.Unschedulable {
+		return false
+	}
+	for _, t := range n.Spec.Taints {
+		if t.Effect == corev1.TaintEffectPreferNoSchedule {
+			continue
+		}
+		// compose-model-replica gives Modelplane's GPU pods this one
+		// toleration (_GPU_TOLERATION in
+		// functions/compose-model-replica/function/backends/base.py).
+		if t.Key == TaintGPU && t.Effect == corev1.TaintEffectNoSchedule {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // IsUnschedulable returns true if the scheduler couldn't find a node for the
