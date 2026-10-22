@@ -281,7 +281,10 @@ spec:
                     minimum: 0
                     type: integer
                   schedulable:
-                    description: Schedulable counts the ready nodes that aren't cordoned.
+                    description: |-
+                      Schedulable counts the ready nodes that aren't cordoned, and carry no
+                      NoSchedule or NoExecute taint but nvidia.com/gpu with NoSchedule, which
+                      Modelplane's GPU pods tolerate.
                     format: int32
                     minimum: 0
                     type: integer
