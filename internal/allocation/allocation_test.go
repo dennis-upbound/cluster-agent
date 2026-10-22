@@ -17,6 +17,7 @@ limitations under the License.
 package allocation
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -32,6 +33,9 @@ import (
 )
 
 var errBoom = errors.New("boom")
+
+// noFloor reports that no agent has published an allocation time.
+func noFloor(_ context.Context) (time.Time, error) { return time.Time{}, nil }
 
 // claim returns a ResourceClaim with the supplied UID that has allocated the
 // supplied GPUs, or that isn't allocated if it supplies none.
@@ -72,15 +76,22 @@ func TestRead(t *testing.T) {
 		err error
 	}
 
+	// What the floor function returns each time the Record calls it.
+	type floor struct {
+		at  time.Time
+		err error
+	}
+
 	cases := map[string]struct {
 		reason string
-		after  time.Time
+		floors []floor
 		clock  []time.Time
 		steps  []step
 		want   []result
 	}{
 		"FirstSeen": {
 			reason: "Each allocated claim should get the time the Record first read it, and an unallocated one none.",
+			floors: []floor{{}},
 			clock:  []time.Time{start, start.Add(time.Second)},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0"), claim("b", "gpu-1"), claim("c")}},
@@ -91,6 +102,7 @@ func TestRead(t *testing.T) {
 		},
 		"SeenBefore": {
 			reason: "A claim read again with the same devices should keep the time it was first read.",
+			floors: []floor{{}},
 			clock:  []time.Time{start, start.Add(time.Second)},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0")}},
@@ -103,6 +115,7 @@ func TestRead(t *testing.T) {
 		},
 		"Reallocated": {
 			reason: "A claim read with different devices than before should get a new time.",
+			floors: []floor{{}},
 			clock:  []time.Time{start, start.Add(time.Second)},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0")}},
@@ -115,6 +128,7 @@ func TestRead(t *testing.T) {
 		},
 		"Deallocated": {
 			reason: "A claim read unallocated should get a new time when it's next read allocated.",
+			floors: []floor{{}},
 			clock:  []time.Time{start, start.Add(time.Second)},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0")}},
@@ -129,6 +143,7 @@ func TestRead(t *testing.T) {
 		},
 		"Forgotten": {
 			reason: "A forgotten claim should get a new time when it's next read.",
+			floors: []floor{{}},
 			clock:  []time.Time{start, start.Add(time.Second)},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0")}},
@@ -142,18 +157,34 @@ func TestRead(t *testing.T) {
 			},
 		},
 		"ClockBehind": {
-			reason: "A Record whose clock is behind the time it must assign after should assign the microseconds after it.",
-			after:  start.Add(time.Hour),
-			clock:  []time.Time{start, start},
+			reason: "A Record whose clock is behind the latest published time should assign the microseconds after it, reading that time only once.",
+			floors: []floor{{at: start.Add(time.Hour)}},
+			clock:  []time.Time{start, start, start},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0"), claim("b", "gpu-1")}},
+				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0"), claim("b", "gpu-1"), claim("c", "gpu-2")}},
 			},
 			want: []result{
 				{at: map[types.UID]time.Time{"a": start.Add(time.Hour + time.Microsecond), "b": start.Add(time.Hour + 2*time.Microsecond)}},
+				{at: map[types.UID]time.Time{"a": start.Add(time.Hour + time.Microsecond), "b": start.Add(time.Hour + 2*time.Microsecond), "c": start.Add(time.Hour + 3*time.Microsecond)}},
+			},
+		},
+		"FloorError": {
+			reason: "An error getting the latest published time should be returned, and the Record should try again on its next read.",
+			floors: []floor{{err: errBoom}, {at: start.Add(time.Hour)}},
+			clock:  []time.Time{start},
+			steps: []step{
+				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0")}},
+				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0")}},
+			},
+			want: []result{
+				{err: errBoom},
+				{at: map[types.UID]time.Time{"a": start.Add(time.Hour + time.Microsecond)}},
 			},
 		},
 		"SameMicrosecond": {
 			reason: "Claims read within one microsecond should get times a microsecond apart, truncated to the microsecond.",
+			floors: []floor{{}},
 			clock:  []time.Time{start.Add(100 * time.Nanosecond), start.Add(900 * time.Nanosecond)},
 			steps: []step{
 				{claims: []resourcev1.ResourceClaim{claim("a", "gpu-0"), claim("b", "gpu-1")}},
@@ -164,6 +195,7 @@ func TestRead(t *testing.T) {
 		},
 		"ReadError": {
 			reason: "An error reading claims should be returned.",
+			floors: []floor{{}},
 			steps: []step{
 				{readErr: errBoom},
 			},
@@ -175,7 +207,14 @@ func TestRead(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := NewRecord(tc.after, WithClock(ticks(tc.clock...)))
+			floors := tc.floors
+			// Indexing past the end panics, which fails a case whose Record reads
+			// the latest published time more often than the case expects.
+			r := NewRecord(func(_ context.Context) (time.Time, error) {
+				f := floors[0]
+				floors = floors[1:]
+				return f.at, f.err
+			}, WithClock(ticks(tc.clock...)))
 			got := make([]result, 0, len(tc.steps))
 			for _, s := range tc.steps {
 				if s.forget != "" {
@@ -183,7 +222,7 @@ func TestRead(t *testing.T) {
 					got = append(got, result{})
 					continue
 				}
-				at, err := r.Read(func() ([]resourcev1.ResourceClaim, error) { return s.claims, s.readErr })
+				at, err := r.Read(t.Context(), func() ([]resourcev1.ResourceClaim, error) { return s.claims, s.readErr })
 				got = append(got, result{at: at, err: err})
 			}
 			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(result{}), cmpopts.EquateErrors()); diff != "" {
@@ -232,13 +271,13 @@ func TestForgetDeleted(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := NewRecord(time.Time{}, WithClock(ticks(start, start.Add(time.Second))))
+			r := NewRecord(noFloor, WithClock(ticks(start, start.Add(time.Second))))
 			read := func() ([]resourcev1.ResourceClaim, error) { return []resourcev1.ResourceClaim{first}, nil }
-			if _, err := r.Read(read); err != nil {
+			if _, err := r.Read(t.Context(), read); err != nil {
 				t.Fatal(err)
 			}
 			tc.send(ForgetDeleted(r))
-			got, err := r.Read(read)
+			got, err := r.Read(t.Context(), read)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -250,8 +289,8 @@ func TestForgetDeleted(t *testing.T) {
 }
 
 func TestReadHoldsLock(t *testing.T) {
-	r := NewRecord(time.Time{})
-	_, _ = r.Read(func() ([]resourcev1.ResourceClaim, error) {
+	r := NewRecord(noFloor)
+	_, _ = r.Read(t.Context(), func() ([]resourcev1.ResourceClaim, error) {
 		if r.mu.TryLock() {
 			t.Error("Read(...): the read function ran without the Record's lock held")
 		}

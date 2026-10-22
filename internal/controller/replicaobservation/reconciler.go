@@ -220,7 +220,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot list pods: %w", err)
 	}
 	var claims []resourcev1.ResourceClaim
-	allocatedAt, err := r.record.Read(func() ([]resourcev1.ResourceClaim, error) {
+	allocatedAt, err := r.record.Read(ctx, func() ([]resourcev1.ResourceClaim, error) {
 		for _, p := range pods.Items {
 			if replica.Finished(p) {
 				continue
@@ -241,7 +241,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return claims, nil
 	})
 	if err != nil {
-		return reconcile.Result{}, err //nolint:wrapcheck // Read returns the error the read function wrapped.
+		return reconcile.Result{}, err //nolint:wrapcheck // Read wraps its own errors, and returns the read function's unchanged.
 	}
 	rslices := &resourcev1.ResourceSliceList{}
 	if err := r.client.List(ctx, rslices, client.UnsafeDisableDeepCopy); err != nil {

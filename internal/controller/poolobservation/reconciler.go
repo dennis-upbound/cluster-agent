@@ -189,14 +189,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, fmt.Errorf("cannot list DeviceClasses: %w", err)
 	}
 	claims := &resourcev1.ResourceClaimList{}
-	allocatedAt, err := r.record.Read(func() ([]resourcev1.ResourceClaim, error) {
+	allocatedAt, err := r.record.Read(ctx, func() ([]resourcev1.ResourceClaim, error) {
 		if err := r.client.List(ctx, claims, client.UnsafeDisableDeepCopy); err != nil {
 			return nil, fmt.Errorf("cannot list ResourceClaims: %w", err)
 		}
 		return claims.Items, nil
 	})
 	if err != nil {
-		return reconcile.Result{}, err //nolint:wrapcheck // Read returns the error the read function wrapped.
+		return reconcile.Result{}, err //nolint:wrapcheck // Read wraps its own errors, and returns the read function's unchanged.
 	}
 	pods := &corev1.PodList{}
 	if err := r.client.List(ctx, pods, client.HasLabels{replica.LabelReplica}, client.UnsafeDisableDeepCopy); err != nil {

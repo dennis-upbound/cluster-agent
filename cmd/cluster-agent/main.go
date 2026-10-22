@@ -19,6 +19,8 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -47,10 +49,11 @@ import (
 )
 
 type cli struct {
-	Debug                  bool          `help:"Log debug messages." short:"d"`
-	ObservationDelay       time.Duration `default:"10s"              help:"How long to wait after the cluster changes before observing its pools. Changes made while waiting are observed together."`
-	MetricsBindAddress     string        `default:":8080"            help:"The address the metrics endpoint binds to."`
-	HealthProbeBindAddress string        `default:":8081"            help:"The address the health probe endpoint binds to."`
+	Debug                   bool          `help:"Log debug messages."                                                                             short:"d"`
+	ObservationDelay        time.Duration `default:"10s"                                                                                          help:"How long to wait after the cluster changes before observing its pools. Changes made while waiting are observed together."`
+	MetricsBindAddress      string        `default:":8080"                                                                                        help:"The address the metrics endpoint binds to."`
+	HealthProbeBindAddress  string        `default:":8081"                                                                                        help:"The address the health probe endpoint binds to."`
+	LeaderElectionNamespace string        `help:"The namespace of the Lease that elects one agent to run. Defaults to the agent's own namespace."`
 }
 
 func main() {
@@ -81,6 +84,13 @@ func main() {
 		Cache:                  CacheOptions(),
 		Metrics:                metricsserver.Options{BindAddress: flags.MetricsBindAddress},
 		HealthProbeBindAddress: flags.HealthProbeBindAddress,
+		// Only one agent may record allocation times. See allocation.Record.
+		LeaderElection:          true,
+		LeaderElectionID:        "cluster-agent.modelplane.ai",
+		LeaderElectionNamespace: flags.LeaderElectionNamespace,
+		// The agent exits as soon as the manager stops, so it can release its
+		// Lease then rather than make its successor wait for it to expire.
+		LeaderElectionReleaseOnCancel: true,
 	})
 	kctx.FatalIfErrorf(err, "cannot create manager")
 
@@ -89,13 +99,20 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	// The cache isn't running yet, so read what's published straight from the
-	// API server.
-	pos := &v1alpha1.PoolObservationList{}
-	kctx.FatalIfErrorf(mgr.GetAPIReader().List(ctx, pos), "cannot list PoolObservations")
-	ros := &v1alpha1.ReplicaObservationList{}
-	kctx.FatalIfErrorf(mgr.GetAPIReader().List(ctx, ros), "cannot list ReplicaObservations")
-	record := allocation.NewRecord(allocation.LatestPublished(pos.Items, ros.Items))
+	// The controllers first read claims once this agent holds the Lease, after
+	// any agent it replaced has stopped. Reading the floor straight from the
+	// API server then includes everything that agent published.
+	record := allocation.NewRecord(func(ctx context.Context) (time.Time, error) {
+		pos := &v1alpha1.PoolObservationList{}
+		if err := mgr.GetAPIReader().List(ctx, pos); err != nil {
+			return time.Time{}, fmt.Errorf("cannot list PoolObservations: %w", err)
+		}
+		ros := &v1alpha1.ReplicaObservationList{}
+		if err := mgr.GetAPIReader().List(ctx, ros); err != nil {
+			return time.Time{}, fmt.Errorf("cannot list ReplicaObservations: %w", err)
+		}
+		return allocation.LatestPublished(pos.Items, ros.Items), nil
+	})
 
 	claims, err := mgr.GetCache().GetInformer(ctx, &resourcev1.ResourceClaim{})
 	kctx.FatalIfErrorf(err, "cannot get ResourceClaim informer")

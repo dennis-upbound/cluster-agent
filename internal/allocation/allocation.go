@@ -26,6 +26,8 @@ limitations under the License.
 package allocation
 
 import (
+	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -45,9 +47,15 @@ import (
 // before. The cache only moves forward, so a read that includes a claim the
 // Record assigned some time includes every claim it assigned an earlier time,
 // unless that claim has since been deallocated or deleted.
+//
+// Only one Record may assign times. Two would each order times against their
+// own reads, so one could give a claim a time no later than one the other
+// published for a pool whose free devices don't account for the claim.
 type Record struct {
 	mu     sync.Mutex
 	now    func() time.Time
+	floor  func(ctx context.Context) (time.Time, error)
+	seeded bool
 	last   time.Time
 	claims map[types.UID]firstSeen
 }
@@ -67,12 +75,14 @@ func WithClock(now func() time.Time) Option {
 	return func(r *Record) { r.now = now }
 }
 
-// NewRecord returns a Record that assigns times later than the supplied one.
-// Supply the latest time the agent has published, so an agent that restarts
-// with a clock that's behind can't assign a claim an earlier time than one it
-// has published.
-func NewRecord(after time.Time, opts ...Option) *Record {
-	r := &Record{now: time.Now, last: after, claims: map[types.UID]firstSeen{}}
+// NewRecord returns a Record that assigns times later than the one the
+// supplied function returns. The function must return the latest time any
+// agent has published, so an agent that replaces another, perhaps with a clock
+// that's behind, can't assign a claim an earlier time than one already
+// published. The Record calls it before it first reads claims, and again on
+// its next read if it fails.
+func NewRecord(floor func(ctx context.Context) (time.Time, error), opts ...Option) *Record {
+	r := &Record{now: time.Now, floor: floor, claims: map[types.UID]firstSeen{}}
 	for _, fn := range opts {
 		fn(r)
 	}
@@ -86,9 +96,18 @@ func NewRecord(after time.Time, opts ...Option) *Record {
 // to it. A claim that allocates different devices than when the Record last
 // saw it is seen allocated afresh, because a pool's free devices might not
 // account for its new ones.
-func (r *Record) Read(read func() ([]resourcev1.ResourceClaim, error)) (map[types.UID]time.Time, error) {
+func (r *Record) Read(ctx context.Context, read func() ([]resourcev1.ResourceClaim, error)) (map[types.UID]time.Time, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if !r.seeded {
+		floor, err := r.floor(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get the latest published allocation time: %w", err)
+		}
+		r.last = floor
+		r.seeded = true
+	}
 
 	claims, err := read()
 	if err != nil {

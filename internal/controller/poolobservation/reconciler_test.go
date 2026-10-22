@@ -335,7 +335,7 @@ func TestReconcile(t *testing.T) {
 				WithInterceptorFuncs(tc.params.interceptor).
 				Build()
 			gotObserved := observed{}
-			record := allocation.NewRecord(time.Time{}, allocation.WithClock(func() time.Time { return allocated }))
+			record := allocation.NewRecord(func(_ context.Context) (time.Time, error) { return time.Time{}, nil }, allocation.WithClock(func() time.Time { return allocated }))
 			r := NewReconciler(c, record, WithPoolObserver(PoolObserverFn(func(_ context.Context, name string, in pool.Inputs) (pool.Observation, error) {
 				gotObserved = observed{Pool: name, Inputs: in}
 				return tc.params.observation, tc.params.observeErr

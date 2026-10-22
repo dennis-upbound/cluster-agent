@@ -1,0 +1,45 @@
+{{- /*
+The agent takes a Lease in its own namespace before it reconciles, so that one
+agent runs at a time. controller-gen generates only the ClusterRole in role.yaml,
+so this namespaced Role is written by hand.
+*/ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-agent-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster-agent.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - create
+  - update
+# The agent records an event when it becomes the leader.
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-agent-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-agent-leader-election
+subjects:
+- kind: ServiceAccount
+  name: cluster-agent
+  namespace: {{ .Release.Namespace }}

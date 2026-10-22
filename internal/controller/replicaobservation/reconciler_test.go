@@ -351,7 +351,7 @@ func TestReconcile(t *testing.T) {
 				WithInterceptorFuncs(tc.params.interceptor).
 				Build()
 			var inputs replica.Inputs
-			r := NewReconciler(c, allocation.NewRecord(time.Time{}, allocation.WithClock(func() time.Time { return allocated })), WithReplicaObserver(ReplicaObserverFn(func(in replica.Inputs) replica.Observation {
+			r := NewReconciler(c, allocation.NewRecord(func(_ context.Context) (time.Time, error) { return time.Time{}, nil }, allocation.WithClock(func() time.Time { return allocated })), WithReplicaObserver(ReplicaObserverFn(func(in replica.Inputs) replica.Observation {
 				inputs = in
 				return tc.params.observation
 			})))

@@ -7,9 +7,6 @@ metadata:
     {{- include "cluster-agent.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  # The agent doesn't elect a leader, so don't run two at once.
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: cluster-agent
