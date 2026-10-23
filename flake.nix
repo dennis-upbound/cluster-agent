@@ -268,15 +268,23 @@
 
           push =
             app "push"
-              "Push a multi-architecture image tagged with the agent's version, e.g. nix run .#push -- ttl.sh/cluster-agent"
-              [ pkgs.crane ]
+              "Push a multi-architecture image and the Helm chart, tagged with the agent's version, e.g. nix run .#push -- ttl.sh/cluster-agent"
+              [
+                pkgs.crane
+                pkgs.kubernetes-helm
+              ]
               ''
-                ref="''${1:?Usage: nix run .#push -- <registry/repository>}:${version}"
+                repo="''${1:?Usage: nix run .#push -- <registry/repository>}"
+                ref="$repo:${version}"
                 ${pkgs.lib.concatMapStrings (a: ''
                   crane push ${b.image a} "$ref-${a}"
                 '') arches}
                 crane index append ${pkgs.lib.concatMapStringsSep " " (a: ''-m "$ref-${a}"'') arches} -t "$ref"
                 echo "Pushed $ref"
+
+                # Helm pushes a chart to the repository named after it, which
+                # is this one when it's named cluster-agent.
+                helm push ${b.chart}/*.tgz "oci://''${repo%/*}"
               '';
         }
       );

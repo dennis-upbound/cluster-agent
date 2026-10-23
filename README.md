@@ -124,7 +124,8 @@ files are current.
   change the API or a controller's RBAC markers.
 - `nix run .#tidy` runs `go mod tidy` and refreshes the flake's Go module hash
   after you change a dependency.
-- `nix run .#push -- <registry/repository>` pushes a multi-architecture image.
+- `nix run .#push -- <registry>/cluster-agent` pushes a multi-architecture image
+  and the Helm chart to that repository.
 - `nix build .#chart` packages the Helm chart.
 
 To run the agent on a cluster, push an image, install the chart, and create a
@@ -157,6 +158,6 @@ Releases are cut from a release branch, like Modelplane's. To release
 3. Run the `CI` workflow against the `v0.1.0` tag, with its `tag` input set to
    `v0.1.0`.
 
-The `tag` input makes the workflow push the image at that version, rather than
-the dev version it derives from git metadata. A patch release reuses the
-`release-0.1` branch.
+The `tag` input makes the workflow push the image and chart at that version,
+rather than the dev version it derives from git metadata. A patch release
+reuses the `release-0.1` branch.
