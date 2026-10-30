@@ -80,6 +80,45 @@ func TestStatus(t *testing.T) {
 				Pools: []v1alpha1.AllocatedPool{{Name: "gpu", LastAllocationTime: metav1.NewMicroTime(allocated)}},
 			},
 		},
+		"Restarted": {
+			reason: "A replica whose containers restarted should count every pod's restarts and report the most recent termination across its pods.",
+			args: args{
+				generation: 1,
+				o: replica.Observation{
+					Pods: []replica.Pod{
+						{
+							Name:            "leader",
+							Scheduling:      replica.Scheduled,
+							Ready:           true,
+							Restarts:        1,
+							LastTermination: &replica.Termination{Container: "engine", Reason: "Error", ExitCode: 1, FinishedAt: allocated},
+						},
+						{
+							Name:            "worker",
+							Scheduling:      replica.Scheduled,
+							Ready:           true,
+							Restarts:        2,
+							LastTermination: &replica.Termination{Container: "engine", Reason: "OOMKilled", ExitCode: 137, FinishedAt: allocated.Add(time.Minute)},
+						},
+					},
+				},
+			},
+			want: v1alpha1.ReplicaObservationStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{Type: v1alpha1.TypeScheduled, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsScheduled, ObservedGeneration: 1, LastTransitionTime: now},
+					{Type: v1alpha1.TypeReady, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonPodsReady, ObservedGeneration: 1, LastTransitionTime: now},
+				},
+				Pods: v1alpha1.PodCounts{Total: 2, Scheduled: 2, Ready: 2, Restarts: 3},
+				LastTermination: &v1alpha1.ContainerTermination{
+					Pod:        "worker",
+					Container:  "engine",
+					Reason:     "OOMKilled",
+					ExitCode:   137,
+					FinishedAt: metav1.NewTime(allocated.Add(time.Minute)),
+				},
+			},
+		},
 		"KeepsTransitionTime": {
 			reason: "A condition whose status hasn't changed should keep its lastTransitionTime, even when its message changes.",
 			args: args{

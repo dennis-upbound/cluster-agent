@@ -144,6 +144,58 @@ func TestObserve(t *testing.T) {
 				},
 			},
 		},
+		"OOMKilled": {
+			reason: "A pod whose containers restarted should count their restarts and report the most recent termination, like an engine that was OOMKilled.",
+			in: Inputs{
+				Pods: []corev1.Pod{{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ml", Name: "llama-0"},
+					Spec:       corev1.PodSpec{NodeName: "node-a"},
+					Status: corev1.PodStatus{
+						InitContainerStatuses: []corev1.ContainerStatus{{
+							Name:         "proxy",
+							RestartCount: 1,
+							LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+								Reason:     "Error",
+								ExitCode:   1,
+								FinishedAt: metav1.NewTime(start),
+							}},
+							State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						}},
+						ContainerStatuses: []corev1.ContainerStatus{{
+							Name:         "engine",
+							RestartCount: 3,
+							LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+								Reason:     "OOMKilled",
+								ExitCode:   137,
+								FinishedAt: metav1.NewTime(start.Add(time.Minute)),
+							}},
+							State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+								Reason:  "CrashLoopBackOff",
+								Message: "back-off 40s restarting failed container=engine pod=llama-0_ml",
+							}},
+						}},
+					},
+				}},
+			},
+			want: Observation{
+				Pods: []Pod{{
+					Name:       "llama-0",
+					Scheduling: Scheduled,
+					Waiting: []Waiting{{
+						Container: "engine",
+						Reason:    "CrashLoopBackOff",
+						Message:   "back-off 40s restarting failed container=engine pod=llama-0_ml",
+					}},
+					Restarts: 4,
+					LastTermination: &Termination{
+						Container:  "engine",
+						Reason:     "OOMKilled",
+						ExitCode:   137,
+						FinishedAt: start.Add(time.Minute),
+					},
+				}},
+			},
+		},
 		"NetworkAttached": {
 			reason: "A device that isn't attached to one node should report no node, though its pod is on one.",
 			in: Inputs{

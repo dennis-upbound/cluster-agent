@@ -55,6 +55,16 @@ func Status(existing v1alpha1.ReplicaObservationStatus, generation int64, observ
 		if p.Ready {
 			status.Pods.Ready++
 		}
+		status.Pods.Restarts += p.Restarts
+		if t := p.LastTermination; t != nil && (status.LastTermination == nil || t.FinishedAt.After(status.LastTermination.FinishedAt.Time)) {
+			status.LastTermination = &v1alpha1.ContainerTermination{
+				Pod:        p.Name,
+				Container:  t.Container,
+				Reason:     t.Reason,
+				ExitCode:   t.ExitCode,
+				FinishedAt: metav1.NewTime(t.FinishedAt),
+			}
+		}
 	}
 	for _, d := range observed.Devices {
 		status.Devices = append(status.Devices, v1alpha1.AllocatedDevice{

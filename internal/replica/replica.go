@@ -115,6 +115,14 @@ type Pod struct {
 	// containers first.
 	Waiting []Waiting
 
+	// Restarts counts the times the kubelet restarted the pod's containers,
+	// init containers included.
+	Restarts int32
+
+	// LastTermination is the most recent termination of one of the pod's
+	// containers that was restarted, or nil if none was.
+	LastTermination *Termination
+
 	// UnallocatedClaims are the names of the ResourceClaims the pod uses that
 	// the agent hasn't seen allocated, because they aren't allocated or it
 	// can't find them.
@@ -126,6 +134,14 @@ type Waiting struct {
 	Container string
 	Reason    string
 	Message   string
+}
+
+// A Termination is a container that terminated and was restarted.
+type Termination struct {
+	Container  string
+	Reason     string
+	ExitCode   int32
+	FinishedAt time.Time
 }
 
 // A Device is a device allocated to one of a replica's pods.
@@ -246,6 +262,15 @@ func ObservePod(p corev1.Pod) Pod {
 	}
 
 	for _, cs := range slices.Concat(p.Status.InitContainerStatuses, p.Status.ContainerStatuses) {
+		observed.Restarts += cs.RestartCount
+		if t := cs.LastTerminationState.Terminated; t != nil && (observed.LastTermination == nil || t.FinishedAt.After(observed.LastTermination.FinishedAt)) {
+			observed.LastTermination = &Termination{
+				Container:  cs.Name,
+				Reason:     t.Reason,
+				ExitCode:   t.ExitCode,
+				FinishedAt: t.FinishedAt.Time,
+			}
+		}
 		if cs.State.Waiting == nil {
 			continue
 		}

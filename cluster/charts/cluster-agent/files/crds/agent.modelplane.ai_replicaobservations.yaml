@@ -220,6 +220,41 @@ spec:
                 - pool
                 - device
                 x-kubernetes-list-type: map
+              lastTermination:
+                description: |-
+                  LastTermination is the most recent termination of one of the replica's
+                  containers that the kubelet then restarted, like an engine that was
+                  OOMKilled. It's omitted when no container has restarted. It's only as
+                  recent as the replica's current pods: a pod that's replaced takes its
+                  containers' terminations with it.
+                properties:
+                  container:
+                    description: Container that terminated.
+                    maxLength: 63
+                    type: string
+                  exitCode:
+                    description: ExitCode of the container's last process.
+                    format: int32
+                    type: integer
+                  finishedAt:
+                    description: FinishedAt is when the container terminated.
+                    format: date-time
+                    type: string
+                  pod:
+                    description: Pod the container belongs to.
+                    maxLength: 253
+                    type: string
+                  reason:
+                    description: Reason the container terminated, like OOMKilled or
+                      Error.
+                    maxLength: 1024
+                    type: string
+                required:
+                - container
+                - exitCode
+                - finishedAt
+                - pod
+                type: object
               observedGeneration:
                 description: ObservedGeneration is the generation of the spec the
                   status reports on.
@@ -230,6 +265,14 @@ spec:
                 properties:
                   ready:
                     description: Ready counts the pods whose Ready condition is True.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  restarts:
+                    description: |-
+                      Restarts counts the times the kubelet restarted the pods' containers,
+                      init containers included. Like a pod's restart counts, it only counts
+                      restarts of the current pods.
                     format: int32
                     minimum: 0
                     type: integer
